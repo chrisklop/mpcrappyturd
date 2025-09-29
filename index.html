@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Turd: Sewer Survival</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        html, body {
+            overscroll-behavior-y: contain;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            position: fixed;
+        }
+        body {
+            margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+            background-color: #2c3e50; font-family: 'Bangers', cursive;
+            touch-action: manipulation;
+            user-select: none; 
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #game-container {
+            position: relative; width: 100%; max-width: 400px; height: 100%; max-height: 600px;
+            background-color: #3d3d3d; border: 5px solid #222; border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2); overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; background-color: rgba(0, 0, 0, 0.6); color: white; z-index: 10;
+            padding: 20px; box-sizing: border-box;
+        }
+        h1 { font-size: 3.5rem; text-shadow: 4px 4px 0 #000; margin-bottom: 10px; }
+        p { font-size: 1.5rem; text-shadow: 2px 2px 0 #000; margin: 10px 20px; }
+        .button {
+            font-family: 'Bangers', cursive; font-size: 2rem; padding: 10px 30px;
+            background-color: #27ae60; color: #fff; border: 4px solid #fff; border-radius: 10px;
+            cursor: pointer; text-shadow: 2px 2px 0 #000; box-shadow: 0 5px 0 #1e8449;
+            transition: all 0.1s ease-in-out;
+        }
+        .button:active { transform: translateY(5px); box-shadow: none; }
+        #current-score {
+            position: absolute; top: 20px; left: 20px;
+            font-size: 2.5rem; color: #2ecc71; text-shadow: 3px 3px 0 #000; z-index: 5;
+        }
+        #ingame-high-score {
+            position: absolute; top: 20px; right: 20px;
+            font-size: 2.5rem; color: #fff; text-shadow: 3px 3px 0 #000; z-index: 5;
+        }
+        .input-group { display: flex; flex-direction: column; align-items: center; width: 90%; max-width: 300px; }
+        .input-group .button {
+            width: 100%;
+        }
+        .input-group input {
+            font-family: 'Bangers', cursive; font-size: 1.5rem; text-align: center;
+            width: 100%; padding: 10px; border-radius: 10px; border: 3px solid #fff;
+            background: #555; color: #fff; margin-bottom: 15px; box-sizing: border-box;
+        }
+        .color-selector { display: flex; justify-content: space-around; width: 100%; margin-bottom: 20px; }
+        .color-box {
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+            border: 4px solid transparent; transition: border-color 0.2s;
+            display: flex; justify-content: center; align-items: center; font-size: 28px;
+            background-size: contain;
+        }
+        .color-box.selected { border-color: #fff; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="current-score">Score: 0</div>
+        <div id="ingame-high-score">High: 0</div>
+        <div id="start-screen" class="overlay">
+            <h1>Sewer Survival</h1>
+            <div class="input-group">
+                <input type="text" id="gamertag-input" placeholder="Enter Your Gamertag" maxlength="10">
+                <div class="color-selector" id="color-selector"></div>
+                <button class="button" id="start-button">Play!</button>
+            </div>
+        </div>
+        <div id="game-over-screen" class="overlay" style="display: none;">
+            <h1>Wasted!</h1>
+            <p>Your Score: <span id="final-score">0</span></p>
+            <p>High Score: <span id="high-score">0</span></p>
+            <div class="button" id="restart-button">Play Again</div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+        const currentScoreDisplay = document.getElementById('current-score');
+        const inGameHighScoreDisplay = document.getElementById('ingame-high-score');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const highScoreDisplay = document.getElementById('high-score');
+        const gamertagInput = document.getElementById('gamertag-input');
+        const colorSelector = document.getElementById('color-selector');
+
+        // --- Sound Effects ---
+        let flapSound, pointSound, crashSound, levelUpSound;
+        
+        function initializeSounds() {
+            if (typeof Tone === 'undefined') return;
+            flapSound = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 } }).toDestination();
+            pointSound = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
+            crashSound = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.005, decay: 0.15, sustain: 0.2, release: 0.2 } }).toDestination();
+            crashSound.connect(new Tone.PitchShift({pitch: -10}).toDestination());
+            levelUpSound = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.1, decay: 1.2, sustain: 0, release: 0.1 } }).toDestination();
+            const fartLFO = new Tone.LFO("8n", 50, 200).start();
+            const fartFilter = new Tone.AutoFilter("2n").toDestination().start();
+            fartLFO.connect(fartFilter.filter.frequency);
+            levelUpSound.connect(fartFilter);
+        }
+
+        // --- Game Configuration ---
+        let canvasWidth, canvasHeight;
+        const gravity = 980;
+        const flapStrength = -350;
+        let obstacleSpeed = -180;
+        const initialObstacleSpeed = -180;
+        const obstacleInterval = 1.5;
+        const colors = [null, 30, 60, 120, 180, 240, 300];
+        let selectedColor = colors[0];
+        const emojiCache = {};
+
+        // --- Game State ---
+        let player, obstacles, score, highScore, gameState, splat, animationFrameId;
+        let backgroundOffset = 0;
+        let lastFrameTime = performance.now();
+        let timeSinceLastObstacle = 0;
+        let levelUpText = "";
+        let levelUpAlpha = 0;
+        highScore = localStorage.getItem('flappyPooHighScore') || 0;
+
+        // --- Emoji Assets ---
+        const playerEmoji = '💩';
+        const ratEmoji = '🐀';
+        const gatorEmoji = '🐊';
+
+        // --- Splat Object ---
+        class Splat {
+            constructor(x, y) { this.x = x; this.y = y; this.radius = 25; this.points = 10; this.pointOffsets = []; for (let i = 0; i < this.points; i++) { this.pointOffsets.push(Math.random() * 15 - 7.5); } }
+            draw() { ctx.fillStyle = '#7a5230'; ctx.beginPath(); ctx.moveTo(this.x + this.radius + this.pointOffsets[0], this.y); for (let i = 1; i <= this.points; i++) { const angle = (i / this.points) * 2 * Math.PI; const r = this.radius + this.pointOffsets[i % this.points]; const px = this.x + r * Math.cos(angle); const py = this.y + r * Math.sin(angle); ctx.lineTo(px, py); } ctx.closePath(); ctx.fill(); }
+        }
+
+        // --- Player Object ---
+        class Player {
+            constructor(gamertag, color) {
+                this.x = canvasWidth / 4;
+                this.y = canvasHeight / 2;
+                this.velocity = 0;
+                this.size = 40;
+                this.isSplat = false;
+                this.gamertag = gamertag;
+                this.color = color;
+                this.emojiImage = emojiCache[this.color];
+            }
+            draw() {
+                if (this.isSplat) return;
+                ctx.drawImage(this.emojiImage, this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+
+                ctx.font = `14px Bangers`;
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.strokeText(this.gamertag, this.x, this.y - this.size / 1.5);
+                ctx.fillText(this.gamertag, this.x, this.y - this.size / 1.5);
+            }
+            update(deltaTime) {
+                this.velocity += gravity * deltaTime;
+                this.y += this.velocity * deltaTime;
+                if (this.y - this.size / 2 < 0) { this.y = this.size / 2; this.velocity = 0; }
+            }
+            flap() { 
+                this.velocity = flapStrength;
+                if(flapSound) {
+                    flapSound.triggerAttackRelease("G4", "8n", Tone.now());
+                    flapSound.frequency.rampTo("B4", 0.1);
+                }
+            }
+        }
+
+        // --- Obstacle Object ---
+        class Obstacle {
+            constructor(config) {
+                this.x = canvasWidth + 50;
+                this.type = config.type; this.visual = config.visual;
+                this.position = config.position; this.passed = false;
+                this.emojiSize = 60; this.pipeWidth = 80; this.pipeCapHeight = 30;
+                this.y = canvasHeight * this.position;
+            }
+            draw() {
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                if (this.visual === 'pipe') this.drawPipe();
+                else if (this.visual === 'rat') this.drawCreature(ratEmoji);
+                else if (this.visual === 'gator') this.drawCreature(gatorEmoji);
+            }
+            drawPipe() {
+                ctx.fillStyle = '#8a8a8a'; const capX = this.x - this.pipeWidth / 2;
+                if (this.type === 'top') {
+                    ctx.fillRect(capX, 0, this.pipeWidth, this.y); ctx.fillStyle = '#6e6e6e';
+                    ctx.fillRect(capX - 10, this.y - this.pipeCapHeight, this.pipeWidth + 20, this.pipeCapHeight);
+                } else {
+                    ctx.fillRect(capX, this.y, this.pipeWidth, canvasHeight - this.y); ctx.fillStyle = '#6e6e6e';
+                    ctx.fillRect(capX - 10, this.y, this.pipeWidth + 20, this.pipeCapHeight);
+                }
+            }
+            drawCreature(emoji) {
+                ctx.font = `${this.emojiSize}px sans-serif`;
+                if (this.type === 'top') {
+                    ctx.save(); ctx.translate(this.x, this.y); ctx.scale(1, -1); ctx.fillText(emoji, 0, 0); ctx.restore();
+                } else {
+                    ctx.fillText(emoji, this.x, this.y);
+                }
+            }
+            update(deltaTime) { this.x += obstacleSpeed * deltaTime; }
+        }
+
+        // --- Game Functions ---
+        function preRenderEmojis() {
+            const size = 40;
+            for (const color of colors) {
+                const offscreenCanvas = document.createElement('canvas');
+                offscreenCanvas.width = size;
+                offscreenCanvas.height = size;
+                const offscreenCtx = offscreenCanvas.getContext('2d');
+                offscreenCtx.save();
+                if (color !== null) {
+                    offscreenCtx.filter = `hue-rotate(${color}deg)`;
+                }
+                offscreenCtx.font = `${size}px sans-serif`;
+                offscreenCtx.textAlign = 'center';
+                offscreenCtx.textBaseline = 'middle';
+                offscreenCtx.fillText(playerEmoji, size / 2, size / 2);
+                offscreenCtx.restore();
+                emojiCache[color] = offscreenCanvas;
+            }
+        }
+
+        function drawSewerBackground() {
+            ctx.fillStyle = '#4a4a4a'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            const brickWidth = 80, brickHeight = 40, loopWidth = canvasWidth + brickWidth;
+            for (let y = -brickHeight; y < canvasHeight + brickHeight; y += brickHeight) {
+                for (let x = -brickWidth; x < canvasWidth + brickWidth; x += brickWidth) {
+                    let offsetX = (y / brickHeight) % 2 === 0 ? 0 : brickWidth / 2;
+                    let scrolledX = (((x + offsetX + backgroundOffset) % loopWidth) + loopWidth) % loopWidth - brickWidth;
+                    ctx.fillStyle = `hsl(0, 30%, ${25 + Math.abs(Math.sin(x * 0.1 + y * 0.05)) * 10}%)`;
+                    ctx.fillRect(scrolledX, y, brickWidth - 2, brickHeight - 2);
+                }
+            }
+            const gradientTop = ctx.createLinearGradient(0, 0, 0, canvasHeight * 0.4);
+            gradientTop.addColorStop(0, 'rgba(0,0,0,0.7)'); gradientTop.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = gradientTop; ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.4);
+            const gradientBottom = ctx.createLinearGradient(0, canvasHeight * 0.6, 0, canvasHeight);
+            gradientBottom.addColorStop(0, 'rgba(0,0,0,0)'); gradientBottom.addColorStop(1, 'rgba(0,0,0,0.8)');
+            ctx.fillStyle = gradientBottom; ctx.fillRect(0, canvasHeight * 0.6, canvasWidth, canvasHeight * 0.4);
+            ctx.fillStyle = '#2a5a2a'; ctx.fillRect(0, canvasHeight - 30, canvasWidth, 30);
+        }
+
+        function init() {
+            gameState = 'lobby';
+            resizeCanvas();
+            startScreen.style.display = 'flex';
+            gameOverScreen.style.display = 'none';
+            currentScoreDisplay.style.display = 'none';
+            inGameHighScoreDisplay.style.display = 'none';
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            lastFrameTime = performance.now();
+            loop();
+        }
+
+        function loop() {
+            const now = performance.now();
+            const deltaTime = (now - lastFrameTime) / 1000;
+            lastFrameTime = now;
+            
+            if (gameState === 'playing' || gameState === 'gameOver') {
+                backgroundOffset -= 60 * deltaTime;
+            }
+            
+            drawSewerBackground();
+
+            if (gameState === 'playing') {
+                player.update(deltaTime);
+                
+                timeSinceLastObstacle += deltaTime;
+                if (timeSinceLastObstacle > obstacleInterval) {
+                    timeSinceLastObstacle = 0;
+                    const difficulty = Math.min(score / 30, 1);
+                    const type = Math.random() > 0.5 ? 'top' : 'bottom';
+                    let position;
+                    if (type === 'top') {
+                        position = 0.15 + Math.random() * 0.2 + (difficulty * 0.2);
+                    } else {
+                        position = 0.85 - Math.random() * 0.2 - (difficulty * 0.2);
+                    }
+                    let visual = 'pipe';
+                    if (score > 2 && Math.random() > 0.6) visual = 'rat';
+                    if (score > 5 && Math.random() > 0.7) visual = 'gator';
+                    obstacles.push(new Obstacle({ type, visual, position }));
+                }
+
+                obstacles.forEach((obstacle, index) => {
+                    obstacle.update(deltaTime);
+                    if (checkCollision(player, obstacle)) endGame();
+                    if (!obstacle.passed && obstacle.x < player.x) {
+                        obstacle.passed = true;
+                        score++;
+                        if(pointSound) pointSound.triggerAttackRelease("B5", "32n", Tone.now());
+                        if(pointSound) pointSound.triggerAttackRelease("E6", "32n", Tone.now() + 0.05);
+                        currentScoreDisplay.textContent = `Score: ${score}`;
+                        if (score > 0 && score % 25 === 0) {
+                            obstacleSpeed -= 25;
+                            const level = Math.floor(score / 25) + 1;
+                            levelUpText = `Level ${level}!`;
+                            levelUpAlpha = 1.0;
+                            if(levelUpSound) levelUpSound.triggerAttackRelease("1.5");
+                        }
+                    }
+                    if (obstacle.x < -100) obstacles.splice(index, 1);
+                });
+                
+                if (player.y + player.size / 2 > canvasHeight) endGame();
+            }
+
+            if(levelUpAlpha > 0) {
+                ctx.save();
+                ctx.globalAlpha = levelUpAlpha;
+                ctx.fillStyle = "white";
+                ctx.strokeStyle = "black";
+                ctx.lineWidth = 4;
+                ctx.font = "80px Bangers";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.strokeText(levelUpText, canvasWidth / 2, canvasHeight / 2);
+                ctx.fillText(levelUpText, canvasWidth / 2, canvasHeight / 2);
+                ctx.restore();
+                levelUpAlpha -= 0.5 * deltaTime;
+            }
+            
+            if(obstacles) obstacles.forEach(o => o.draw());
+            if(player) player.draw();
+            if(splat) splat.draw();
+
+            animationFrameId = requestAnimationFrame(loop);
+        }
+
+        function startGame() {
+            // Initialize audio on first user interaction
+            if (typeof Tone !== 'undefined' && Tone.context.state !== 'running') {
+                Tone.start();
+            }
+            initializeSounds();
+            
+            gameState = 'playing';
+            const gamertag = gamertagInput.value.trim() || `Poo${Math.floor(Math.random()*1000)}`;
+            player = new Player(gamertag, selectedColor);
+            obstacles = [];
+            splat = null;
+            score = 0;
+            timeSinceLastObstacle = 0;
+            obstacleSpeed = initialObstacleSpeed;
+            levelUpText = "";
+            levelUpAlpha = 0;
+            currentScoreDisplay.textContent = `Score: ${score}`;
+            inGameHighScoreDisplay.textContent = `High: ${highScore}`;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            currentScoreDisplay.style.display = 'block';
+            inGameHighScoreDisplay.style.display = 'block';
+            player.flap();
+        }
+
+        function endGame() {
+            if (gameState === 'gameOver') return;
+            gameState = 'gameOver';
+            if(crashSound) crashSound.triggerAttackRelease("0.3");
+            player.isSplat = true;
+            let splatY = player.y; if (player.y + player.size / 2 >= canvasHeight) { splatY = canvasHeight - 15; }
+            splat = new Splat(player.x, splatY);
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('flappyPooHighScore', highScore);
+            }
+            finalScoreDisplay.textContent = score;
+            highScoreDisplay.textContent = highScore;
+            setTimeout(() => {
+                gameOverScreen.style.display = 'flex';
+            }, 500);
+        }
+
+        function checkCollision(player, obstacle) {
+            const p = { l: player.x - player.size / 2 + 10, r: player.x + player.size / 2 - 10, t: player.y - player.size / 2 + 10, b: player.y + player.size / 2 - 10 };
+            let o = {};
+            if (obstacle.visual === 'pipe') {
+                o.l = obstacle.x - obstacle.pipeWidth / 2; o.r = obstacle.x + obstacle.pipeWidth / 2;
+                if (obstacle.type === 'top') { o.t = 0; o.b = obstacle.y; } 
+                else { o.t = obstacle.y; o.b = canvasHeight; }
+            } else {
+                o.l = obstacle.x - obstacle.emojiSize / 2 + 10; o.r = obstacle.x + obstacle.emojiSize / 2 - 10;
+                o.t = obstacle.y - obstacle.emojiSize / 2 + 10; o.b = obstacle.y + obstacle.emojiSize / 2 - 10;
+            }
+            return p.r > o.l && p.l < o.r && p.b > o.t && p.t < o.b;
+        }
+
+        function handleInput(event) {
+            if (gameState === 'playing' && player) {
+                event.preventDefault();
+                player.flap();
+            }
+        }
+        function resizeCanvas() {
+            canvas.width = gameContainer.clientWidth; canvas.height = gameContainer.clientHeight;
+            canvasWidth = canvas.width; canvasHeight = canvas.height;
+        }
+
+        function setupLobby() {
+            colorSelector.innerHTML = '';
+            for (const hue of colors) {
+                const colorBox = document.createElement('div');
+                colorBox.className = 'color-box';
+                colorBox.dataset.color = JSON.stringify(hue);
+                
+                if (hue === null) {
+                    colorBox.textContent = '💩';
+                    colorBox.style.backgroundColor = '#7a5230';
+                } else {
+                    colorBox.style.backgroundColor = `hsl(${hue}, 80%, 50%)`;
+                }
+                
+                if (hue === selectedColor) colorBox.classList.add('selected');
+                
+                colorSelector.appendChild(colorBox);
+            }
+        }
+        
+        // --- Event Listeners & Init ---
+        function handleColorSelect(event) {
+            event.preventDefault();
+            const target = event.target.closest('.color-box');
+            if (!target) return;
+        
+            if (document.querySelector('.color-box.selected')) {
+                document.querySelector('.color-box.selected').classList.remove('selected');
+            }
+            target.classList.add('selected');
+            selectedColor = JSON.parse(target.dataset.color);
+        }
+
+        colorSelector.addEventListener('click', handleColorSelect);
+        colorSelector.addEventListener('touchstart', handleColorSelect, { passive: false });
+        
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            init();
+        });
+        window.addEventListener('resize', init);
+        
+        gameContainer.addEventListener('mousedown', handleInput);
+        gameContainer.addEventListener('touchstart', handleInput, { passive: false });
+        
+        window.addEventListener('keydown', (e) => { 
+            if (e.code === 'Space') { 
+                e.preventDefault();
+                if (gameState === 'playing') {
+                    handleInput(e);
+                } else if (gameState === 'lobby' || gameState === 'start') {
+                    startGame();
+                }
+            } 
+        });
+
+        window.addEventListener('touchmove', function (event) {
+            if (event.touches.length > 1) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+
+        window.onload = () => {
+            preRenderEmojis();
+            setupLobby();
+            init();
+        };
+    </script>
+</body>
+</html>
+
