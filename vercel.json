@@ -14,7 +14,7 @@
     },
     {
       "src": "/socket.io/(.*)",
-      "dest": "/api/socket"
+      "dest": "/api/edge-socket"
     },
     {
       "src": "/(.*)",
@@ -22,7 +22,7 @@
     }
   ],
   "functions": {
-    "api/socket.js": {
+    "api/edge-socket.js": {
       "includeFiles": "**"
     }
   },

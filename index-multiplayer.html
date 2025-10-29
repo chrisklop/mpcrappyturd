@@ -278,7 +278,7 @@
                 return new Promise((resolve, reject) => {
                     const socketOptions = window.location.hostname === 'localhost' ? 
                         {} : 
-                        { path: '/api/socket' };
+                        { path: '/api/edge-socket' };
                     
                     this.socket = io(SERVER_URL, socketOptions);
                     
@@ -356,7 +356,7 @@
             
             async getServerStats() {
                 try {
-                    const response = await fetch(`${SERVER_URL}/api/stats`);
+                    const response = await fetch(`${SERVER_URL}/api/edge-stats`);
                     return await response.json();
                 } catch (error) {
                     console.error('Failed to get server stats:', error);
