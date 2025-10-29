@@ -1,6 +1,9 @@
 // Simple room-based multiplayer API for Vercel
-let rooms = new Map();
-let onlinePlayers = new Set();
+// Use global to persist across requests in same container
+global.rooms = global.rooms || new Map();
+global.onlinePlayers = global.onlinePlayers || new Set();
+let rooms = global.rooms;
+let onlinePlayers = global.onlinePlayers;
 
 // Clean up old rooms periodically
 setInterval(() => {
@@ -25,6 +28,8 @@ export default async function handler(req, res) {
 
   const { method } = req;
   const { action } = req.query;
+  
+  console.log(`[ROOMS API] ${method} ${action} - Current rooms:`, rooms.size);
 
   try {
     if (method === 'POST') {
@@ -36,10 +41,13 @@ export default async function handler(req, res) {
         let room = null;
         
         // Look for a room with space
+        console.log('[JOIN] Looking for available rooms...');
         for (const [id, r] of rooms.entries()) {
+          console.log(`[JOIN] Room ${id}: ${r.players.length}/6 players, status: ${r.status}`);
           if (r.players.length < 6 && r.status === 'waiting') {
             roomId = id;
             room = r;
+            console.log(`[JOIN] Found available room: ${id}`);
             break;
           }
         }
@@ -55,6 +63,7 @@ export default async function handler(req, res) {
             lastActivity: Date.now()
           };
           rooms.set(roomId, room);
+          console.log(`[JOIN] Created new room: ${roomId}`);
         }
         
         // Add player to room
