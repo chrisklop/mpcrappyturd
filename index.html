@@ -265,8 +265,8 @@
                 this.x = 80;
                 this.y = 300;
                 this.velocity = 0;
-                this.gravity = 0.25; // Reduced by 50% for better playability
-                this.jumpPower = -6; // Reduced from -8 to -6 for gentler flapping
+                this.gravity = 0.12; // Much gentler gravity for proper game feel
+                this.jumpPower = -3.5; // Small, frequent taps instead of big jumps
                 this.size = 20;
                 this.color = '#ff6b35';
                 this.eliminated = false;
@@ -313,15 +313,15 @@
         class Obstacle {
             constructor(x) {
                 this.x = x;
-                this.width = 50;
-                this.gap = 150;
+                this.width = 40; // Narrower obstacles
+                this.gap = 180; // Larger gap for better playability
                 this.topHeight = Math.random() * (canvas.height - this.gap - 100) + 50;
                 this.bottomHeight = canvas.height - this.topHeight - this.gap;
                 this.passed = false;
             }
             
             update() {
-                this.x -= 1; // Reduced from 2 to 1 (50% slower obstacle movement)
+                this.x -= 0.7; // Much slower, more manageable speed
             }
             
             draw() {
@@ -487,7 +487,7 @@
             player.update();
             
             // Generate obstacles (only after game starts) - slower generation
-            if (frameCount % 180 === 0 && gameStarted) { // Increased from 120 to 180 (50% less frequent)
+            if (frameCount % 240 === 0 && gameStarted) { // Every 4 seconds for proper spacing
                 obstacles.push(new Obstacle(canvas.width));
             }
             
