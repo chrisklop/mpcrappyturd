@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Turd: Sewer Survival</title>
+    <title>Flappy Turd: Multiplayer Sewer Survival</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
@@ -37,466 +37,606 @@
             padding: 20px; box-sizing: border-box;
         }
         h1 { font-size: 3.5rem; text-shadow: 4px 4px 0 #000; margin-bottom: 10px; }
+        h2 { font-size: 2.5rem; text-shadow: 3px 3px 0 #000; margin-bottom: 15px; }
         p { font-size: 1.5rem; text-shadow: 2px 2px 0 #000; margin: 10px 20px; }
         .button {
             font-family: 'Bangers', cursive; font-size: 2rem; padding: 10px 30px;
             background-color: #27ae60; color: #fff; border: 4px solid #fff; border-radius: 10px;
             cursor: pointer; text-shadow: 2px 2px 0 #000; box-shadow: 0 5px 0 #1e8449;
-            transition: all 0.1s ease-in-out;
+            transition: all 0.1s ease-in-out; margin: 5px;
         }
         .button:active { transform: translateY(5px); box-shadow: none; }
-        #current-score {
-            position: absolute; top: 20px; left: 20px;
-            font-size: 2.5rem; color: #2ecc71; text-shadow: 3px 3px 0 #000; z-index: 5;
+        .button.secondary {
+            background-color: #e74c3c; box-shadow: 0 5px 0 #c0392b;
         }
-        #ingame-high-score {
-            position: absolute; top: 20px; right: 20px;
-            font-size: 2.5rem; color: #fff; text-shadow: 3px 3px 0 #000; z-index: 5;
+        input[type="text"] {
+            font-family: 'Bangers', cursive; font-size: 1.8rem; padding: 10px;
+            border: 4px solid #fff; border-radius: 10px; background-color: #fff;
+            color: #000; text-align: center; margin: 10px; width: 250px;
         }
-        .input-group { display: flex; flex-direction: column; align-items: center; width: 90%; max-width: 300px; }
-        .input-group .button {
-            width: 100%;
+        .status { font-size: 1.2rem; margin: 10px; color: #f39c12; }
+        #hud {
+            position: absolute; top: 10px; left: 10px; right: 10px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            color: white; font-size: 1.5rem; z-index: 5; pointer-events: none;
         }
-        .input-group input {
-            font-family: 'Bangers', cursive; font-size: 1.5rem; text-align: center;
-            width: 100%; padding: 10px; border-radius: 10px; border: 3px solid #fff;
-            background: #555; color: #fff; margin-bottom: 15px; box-sizing: border-box;
+        .lobby-info {
+            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 10px;
+            margin: 10px; font-size: 1.2rem;
         }
-        .color-selector { display: flex; justify-content: space-around; width: 100%; margin-bottom: 20px; }
-        .color-box {
-            width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
-            border: 4px solid transparent; transition: border-color 0.2s;
-            display: flex; justify-content: center; align-items: center; font-size: 28px;
-            background-size: contain;
-        }
-        .color-box.selected { border-color: #fff; }
     </style>
 </head>
 <body>
     <div id="game-container">
-        <div id="current-score">Score: 0</div>
-        <div id="ingame-high-score">High: 0</div>
-        <div id="start-screen" class="overlay">
-            <h1>Sewer Survival</h1>
-            <div class="input-group">
-                <input type="text" id="gamertag-input" placeholder="Enter Your Gamertag" maxlength="10">
-                <div class="color-selector" id="color-selector"></div>
-                <button class="button" id="start-button">Play!</button>
+        <canvas id="game-canvas" width="400" height="600"></canvas>
+        
+        <!-- HUD -->
+        <div id="hud">
+            <div>Score: <span id="score">0</span></div>
+            <div class="status" id="connection-status">Offline</div>
+            <div class="status">State: <span id="debug-state">menu</span></div>
+        </div>
+
+        <!-- Mode Selection Screen -->
+        <div class="overlay" id="mode-screen">
+            <h1>🚽 Flappy Turd 💩</h1>
+            <h2>Multiplayer Sewer Survival</h2>
+            <input type="text" id="gamertag-input" placeholder="Enter Your Sewer Handle" maxlength="10">
+            <button class="button" id="single-btn">Single Player</button>
+            <button class="button" id="multiplayer-btn">Multiplayer</button>
+            <div class="lobby-info">
+                <div>🌐 Online Players: <span id="online-count">...</span></div>
+                <div>🏠 Active Rooms: <span id="rooms-count">...</span></div>
             </div>
         </div>
-        <div id="game-over-screen" class="overlay" style="display: none;">
-            <h1>Wasted!</h1>
-            <p>Your Score: <span id="final-score">0</span></p>
-            <p>High Score: <span id="high-score">0</span></p>
-            <div class="button" id="restart-button">Play Again</div>
+
+        <!-- Lobby Screen -->
+        <div class="overlay" id="lobby-screen" style="display: none;">
+            <h2>Sewer Lobby</h2>
+            <div class="lobby-info">
+                <div>Room: <span id="room-id">...</span></div>
+                <div>Players: <span id="player-count">1</span>/6</div>
+                <div id="player-list"></div>
+            </div>
+            <button class="button" id="ready-btn">Ready to Swim! 🏊‍♂️</button>
+            <button class="button" id="force-start-btn" style="display: none;">Fly Now! (2+ Players) 🚀</button>
+            <button class="button secondary" id="leave-btn">Leave Lobby</button>
+            <div class="status" id="lobby-status">Waiting for players...</div>
         </div>
-        <canvas id="gameCanvas"></canvas>
+
+        <!-- Get Ready Screen -->
+        <div class="overlay" id="get-ready-screen" style="display: none;">
+            <h2>🚽 Get Ready! 💩</h2>
+            <p>Click or press SPACE to flap through the sewer pipes!</p>
+            <p id="countdown-text">Starting in 3...</p>
+            <button class="button" id="start-now-btn">Start Now!</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div class="overlay" id="game-over-screen" style="display: none;">
+            <h2 id="game-over-title">Game Over!</h2>
+            <p id="final-score">Score: 0</p>
+            <div id="multiplayer-results" style="display: none;">
+                <h3>Final Rankings:</h3>
+                <div id="rankings"></div>
+            </div>
+            <button class="button" id="restart-btn">Play Again</button>
+        </div>
     </div>
 
     <script>
-        // --- DOM Elements ---
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const gameContainer = document.getElementById('game-container');
-        const currentScoreDisplay = document.getElementById('current-score');
-        const inGameHighScoreDisplay = document.getElementById('ingame-high-score');
-        const startScreen = document.getElementById('start-screen');
-        const gameOverScreen = document.getElementById('game-over-screen');
-        const startButton = document.getElementById('start-button');
-        const restartButton = document.getElementById('restart-button');
-        const finalScoreDisplay = document.getElementById('final-score');
-        const highScoreDisplay = document.getElementById('high-score');
-        const gamertagInput = document.getElementById('gamertag-input');
-        const colorSelector = document.getElementById('color-selector');
-
-        // --- Sound Effects ---
-        let flapSound, pointSound, crashSound, levelUpSound;
+        // Initialize audio context on user interaction
+        let audioContextStarted = false;
         
-        function initializeSounds() {
-            if (typeof Tone === 'undefined') return;
-            flapSound = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 } }).toDestination();
-            pointSound = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
-            crashSound = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.005, decay: 0.15, sustain: 0.2, release: 0.2 } }).toDestination();
-            crashSound.connect(new Tone.PitchShift({pitch: -10}).toDestination());
-            levelUpSound = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.1, decay: 1.2, sustain: 0, release: 0.1 } }).toDestination();
-            const fartLFO = new Tone.LFO("8n", 50, 200).start();
-            const fartFilter = new Tone.AutoFilter("2n").toDestination().start();
-            fartLFO.connect(fartFilter.filter.frequency);
-            levelUpSound.connect(fartFilter);
-        }
-
-        // --- Game Configuration ---
-        let canvasWidth, canvasHeight;
-        const gravity = 980;
-        const flapStrength = -350;
-        let obstacleSpeed = -180;
-        const initialObstacleSpeed = -180;
-        const obstacleInterval = 1.5;
-        const colors = [null, 30, 60, 120, 180, 240, 300];
-        let selectedColor = colors[0];
-        const emojiCache = {};
-
-        // --- Game State ---
-        let player, obstacles, score, highScore, gameState, splat, animationFrameId;
-        let backgroundOffset = 0;
-        let lastFrameTime = performance.now();
-        let timeSinceLastObstacle = 0;
-        let levelUpText = "";
-        let levelUpAlpha = 0;
-        highScore = localStorage.getItem('flappyPooHighScore') || 0;
-
-        // --- Emoji Assets ---
-        const playerEmoji = '💩';
-        const ratEmoji = '🐀';
-        const gatorEmoji = '🐊';
-
-        // --- Splat Object ---
-        class Splat {
-            constructor(x, y) { this.x = x; this.y = y; this.radius = 25; this.points = 10; this.pointOffsets = []; for (let i = 0; i < this.points; i++) { this.pointOffsets.push(Math.random() * 15 - 7.5); } }
-            draw() { ctx.fillStyle = '#7a5230'; ctx.beginPath(); ctx.moveTo(this.x + this.radius + this.pointOffsets[0], this.y); for (let i = 1; i <= this.points; i++) { const angle = (i / this.points) * 2 * Math.PI; const r = this.radius + this.pointOffsets[i % this.points]; const px = this.x + r * Math.cos(angle); const py = this.y + r * Math.sin(angle); ctx.lineTo(px, py); } ctx.closePath(); ctx.fill(); }
-        }
-
-        // --- Player Object ---
-        class Player {
-            constructor(gamertag, color) {
-                this.x = canvasWidth / 4;
-                this.y = canvasHeight / 2;
-                this.velocity = 0;
-                this.size = 40;
-                this.isSplat = false;
-                this.gamertag = gamertag;
-                this.color = color;
-                this.emojiImage = emojiCache[this.color];
-            }
-            draw() {
-                if (this.isSplat) return;
-                ctx.drawImage(this.emojiImage, this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
-
-                ctx.font = `14px Bangers`;
-                ctx.fillStyle = 'white';
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 3;
-                ctx.strokeText(this.gamertag, this.x, this.y - this.size / 1.5);
-                ctx.fillText(this.gamertag, this.x, this.y - this.size / 1.5);
-            }
-            update(deltaTime) {
-                this.velocity += gravity * deltaTime;
-                this.y += this.velocity * deltaTime;
-                if (this.y - this.size / 2 < 0) { this.y = this.size / 2; this.velocity = 0; }
-            }
-            flap() { 
-                this.velocity = flapStrength;
-                if(flapSound) {
-                    flapSound.triggerAttackRelease("G4", "8n", Tone.now());
-                    flapSound.frequency.rampTo("B4", 0.1);
-                }
-            }
-        }
-
-        // --- Obstacle Object ---
-        class Obstacle {
-            constructor(config) {
-                this.x = canvasWidth + 50;
-                this.type = config.type; this.visual = config.visual;
-                this.position = config.position; this.passed = false;
-                this.emojiSize = 60; this.pipeWidth = 80; this.pipeCapHeight = 30;
-                this.y = canvasHeight * this.position;
-            }
-            draw() {
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                if (this.visual === 'pipe') this.drawPipe();
-                else if (this.visual === 'rat') this.drawCreature(ratEmoji);
-                else if (this.visual === 'gator') this.drawCreature(gatorEmoji);
-            }
-            drawPipe() {
-                ctx.fillStyle = '#8a8a8a'; const capX = this.x - this.pipeWidth / 2;
-                if (this.type === 'top') {
-                    ctx.fillRect(capX, 0, this.pipeWidth, this.y); ctx.fillStyle = '#6e6e6e';
-                    ctx.fillRect(capX - 10, this.y - this.pipeCapHeight, this.pipeWidth + 20, this.pipeCapHeight);
-                } else {
-                    ctx.fillRect(capX, this.y, this.pipeWidth, canvasHeight - this.y); ctx.fillStyle = '#6e6e6e';
-                    ctx.fillRect(capX - 10, this.y, this.pipeWidth + 20, this.pipeCapHeight);
-                }
-            }
-            drawCreature(emoji) {
-                ctx.font = `${this.emojiSize}px sans-serif`;
-                if (this.type === 'top') {
-                    ctx.save(); ctx.translate(this.x, this.y); ctx.scale(1, -1); ctx.fillText(emoji, 0, 0); ctx.restore();
-                } else {
-                    ctx.fillText(emoji, this.x, this.y);
-                }
-            }
-            update(deltaTime) { this.x += obstacleSpeed * deltaTime; }
-        }
-
-        // --- Game Functions ---
-        function preRenderEmojis() {
-            const size = 40;
-            for (const color of colors) {
-                const offscreenCanvas = document.createElement('canvas');
-                offscreenCanvas.width = size;
-                offscreenCanvas.height = size;
-                const offscreenCtx = offscreenCanvas.getContext('2d');
-                offscreenCtx.save();
-                if (color !== null) {
-                    offscreenCtx.filter = `hue-rotate(${color}deg)`;
-                }
-                offscreenCtx.font = `${size}px sans-serif`;
-                offscreenCtx.textAlign = 'center';
-                offscreenCtx.textBaseline = 'middle';
-                offscreenCtx.fillText(playerEmoji, size / 2, size / 2);
-                offscreenCtx.restore();
-                emojiCache[color] = offscreenCanvas;
-            }
-        }
-
-        function drawSewerBackground() {
-            ctx.fillStyle = '#4a4a4a'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-            const brickWidth = 80, brickHeight = 40, loopWidth = canvasWidth + brickWidth;
-            for (let y = -brickHeight; y < canvasHeight + brickHeight; y += brickHeight) {
-                for (let x = -brickWidth; x < canvasWidth + brickWidth; x += brickWidth) {
-                    let offsetX = (y / brickHeight) % 2 === 0 ? 0 : brickWidth / 2;
-                    let scrolledX = (((x + offsetX + backgroundOffset) % loopWidth) + loopWidth) % loopWidth - brickWidth;
-                    ctx.fillStyle = `hsl(0, 30%, ${25 + Math.abs(Math.sin(x * 0.1 + y * 0.05)) * 10}%)`;
-                    ctx.fillRect(scrolledX, y, brickWidth - 2, brickHeight - 2);
-                }
-            }
-            const gradientTop = ctx.createLinearGradient(0, 0, 0, canvasHeight * 0.4);
-            gradientTop.addColorStop(0, 'rgba(0,0,0,0.7)'); gradientTop.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = gradientTop; ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.4);
-            const gradientBottom = ctx.createLinearGradient(0, canvasHeight * 0.6, 0, canvasHeight);
-            gradientBottom.addColorStop(0, 'rgba(0,0,0,0)'); gradientBottom.addColorStop(1, 'rgba(0,0,0,0.8)');
-            ctx.fillStyle = gradientBottom; ctx.fillRect(0, canvasHeight * 0.6, canvasWidth, canvasHeight * 0.4);
-            ctx.fillStyle = '#2a5a2a'; ctx.fillRect(0, canvasHeight - 30, canvasWidth, 30);
-        }
-
-        function init() {
-            gameState = 'lobby';
-            resizeCanvas();
-            startScreen.style.display = 'flex';
-            gameOverScreen.style.display = 'none';
-            currentScoreDisplay.style.display = 'none';
-            inGameHighScoreDisplay.style.display = 'none';
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-            lastFrameTime = performance.now();
-            loop();
-        }
-
-        function loop() {
-            const now = performance.now();
-            const deltaTime = (now - lastFrameTime) / 1000;
-            lastFrameTime = now;
-            
-            if (gameState === 'playing' || gameState === 'gameOver') {
-                backgroundOffset -= 60 * deltaTime;
+        // Game variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameState = 'menu'; // 'menu', 'playing', 'game-over'
+        let gameMode = 'single'; // 'single' or 'multiplayer'
+        let score = 0;
+        let frameCount = 0;
+        let gravityActive = false; // BULLETPROOF: gravity only starts after first input
+        console.log('GAME LOADED - gravityActive:', gravityActive);
+        
+        // Multiplayer variables
+        let playerId = null;
+        let roomId = null;
+        let gamertag = '';
+        let isReady = false;
+        let currentRoom = null;
+        let pollInterval = null;
+        
+        // UI elements
+        const modeScreen = document.getElementById('mode-screen');
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const getReadyScreen = document.getElementById('get-ready-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const gamertagInput = document.getElementById('gamertag-input');
+        
+        // Simple multiplayer API
+        const API_BASE = window.location.origin + '/api/rooms';
+        
+        class SimpleMultiplayer {
+            constructor() {
+                this.connected = false;
             }
             
-            drawSewerBackground();
-
-            if (gameState === 'playing') {
-                player.update(deltaTime);
-                
-                timeSinceLastObstacle += deltaTime;
-                if (timeSinceLastObstacle > obstacleInterval) {
-                    timeSinceLastObstacle = 0;
-                    const difficulty = Math.min(score / 30, 1);
-                    const type = Math.random() > 0.5 ? 'top' : 'bottom';
-                    let position;
-                    if (type === 'top') {
-                        position = 0.15 + Math.random() * 0.2 + (difficulty * 0.2);
+            async joinRoom(gamertag) {
+                try {
+                    const response = await fetch(API_BASE + '?action=join', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            playerId: playerId,
+                            gamertag: gamertag,
+                            color: '#ff6b35'
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        roomId = data.roomId;
+                        currentRoom = data.room;
+                        this.connected = true;
+                        return data;
                     } else {
-                        position = 0.85 - Math.random() * 0.2 - (difficulty * 0.2);
+                        throw new Error(data.error);
                     }
-                    let visual = 'pipe';
-                    if (score > 2 && Math.random() > 0.6) visual = 'rat';
-                    if (score > 5 && Math.random() > 0.7) visual = 'gator';
-                    obstacles.push(new Obstacle({ type, visual, position }));
+                } catch (error) {
+                    console.error('Failed to join room:', error);
+                    throw error;
                 }
-
-                obstacles.forEach((obstacle, index) => {
-                    obstacle.update(deltaTime);
-                    if (checkCollision(player, obstacle)) endGame();
-                    if (!obstacle.passed && obstacle.x < player.x) {
-                        obstacle.passed = true;
-                        score++;
-                        if(pointSound) pointSound.triggerAttackRelease("B5", "32n", Tone.now());
-                        if(pointSound) pointSound.triggerAttackRelease("E6", "32n", Tone.now() + 0.05);
-                        currentScoreDisplay.textContent = `Score: ${score}`;
-                        if (score > 0 && score % 25 === 0) {
-                            obstacleSpeed -= 25;
-                            const level = Math.floor(score / 25) + 1;
-                            levelUpText = `Level ${level}!`;
-                            levelUpAlpha = 1.0;
-                            if(levelUpSound) levelUpSound.triggerAttackRelease("1.5");
+            }
+            
+            async setReady(ready) {
+                try {
+                    const response = await fetch(API_BASE + '?action=ready', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: roomId,
+                            playerId: playerId,
+                            ready: ready
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        currentRoom = data.room;
+                        return data;
+                    }
+                } catch (error) {
+                    console.error('Failed to set ready:', error);
+                }
+            }
+            
+            async pollRoom() {
+                if (!roomId) return;
+                
+                try {
+                    const response = await fetch(API_BASE + `?action=room&roomId=${roomId}`);
+                    const data = await response.json();
+                    if (response.ok) {
+                        currentRoom = data.room;
+                        updateLobbyDisplay();
+                        
+                        // Check if game should start
+                        if (currentRoom.status === 'starting' && gameState === 'menu') {
+                            startGame(); // This will show get-ready screen
                         }
                     }
-                    if (obstacle.x < -100) obstacles.splice(index, 1);
-                });
-                
-                if (player.y + player.size / 2 > canvasHeight) endGame();
-            }
-
-            if(levelUpAlpha > 0) {
-                ctx.save();
-                ctx.globalAlpha = levelUpAlpha;
-                ctx.fillStyle = "white";
-                ctx.strokeStyle = "black";
-                ctx.lineWidth = 4;
-                ctx.font = "80px Bangers";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.strokeText(levelUpText, canvasWidth / 2, canvasHeight / 2);
-                ctx.fillText(levelUpText, canvasWidth / 2, canvasHeight / 2);
-                ctx.restore();
-                levelUpAlpha -= 0.5 * deltaTime;
+                } catch (error) {
+                    console.error('Failed to poll room:', error);
+                }
             }
             
-            if(obstacles) obstacles.forEach(o => o.draw());
-            if(player) player.draw();
-            if(splat) splat.draw();
-
-            animationFrameId = requestAnimationFrame(loop);
-        }
-
-        function startGame() {
-            // Initialize audio on first user interaction
-            if (typeof Tone !== 'undefined' && Tone.context.state !== 'running') {
-                Tone.start();
+            async getStats() {
+                try {
+                    const response = await fetch(API_BASE + '?action=stats');
+                    const data = await response.json();
+                    if (response.ok) {
+                        return data;
+                    }
+                } catch (error) {
+                    console.error('Failed to get stats:', error);
+                }
+                return { activeRooms: 1, onlineCount: 3 };
             }
-            initializeSounds();
             
-            gameState = 'playing';
-            const gamertag = gamertagInput.value.trim() || `Poo${Math.floor(Math.random()*1000)}`;
-            player = new Player(gamertag, selectedColor);
-            obstacles = [];
-            splat = null;
-            score = 0;
-            timeSinceLastObstacle = 0;
-            obstacleSpeed = initialObstacleSpeed;
-            levelUpText = "";
-            levelUpAlpha = 0;
-            currentScoreDisplay.textContent = `Score: ${score}`;
-            inGameHighScoreDisplay.textContent = `High: ${highScore}`;
-            startScreen.style.display = 'none';
-            gameOverScreen.style.display = 'none';
-            currentScoreDisplay.style.display = 'block';
-            inGameHighScoreDisplay.style.display = 'block';
-            player.flap();
-        }
-
-        function endGame() {
-            if (gameState === 'gameOver') return;
-            gameState = 'gameOver';
-            if(crashSound) crashSound.triggerAttackRelease("0.3");
-            player.isSplat = true;
-            let splatY = player.y; if (player.y + player.size / 2 >= canvasHeight) { splatY = canvasHeight - 15; }
-            splat = new Splat(player.x, splatY);
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem('flappyPooHighScore', highScore);
+            startPolling() {
+                if (pollInterval) clearInterval(pollInterval);
+                pollInterval = setInterval(() => this.pollRoom(), 2000);
             }
-            finalScoreDisplay.textContent = score;
-            highScoreDisplay.textContent = highScore;
-            setTimeout(() => {
-                gameOverScreen.style.display = 'flex';
-            }, 500);
-        }
-
-        function checkCollision(player, obstacle) {
-            const p = { l: player.x - player.size / 2 + 10, r: player.x + player.size / 2 - 10, t: player.y - player.size / 2 + 10, b: player.y + player.size / 2 - 10 };
-            let o = {};
-            if (obstacle.visual === 'pipe') {
-                o.l = obstacle.x - obstacle.pipeWidth / 2; o.r = obstacle.x + obstacle.pipeWidth / 2;
-                if (obstacle.type === 'top') { o.t = 0; o.b = obstacle.y; } 
-                else { o.t = obstacle.y; o.b = canvasHeight; }
-            } else {
-                o.l = obstacle.x - obstacle.emojiSize / 2 + 10; o.r = obstacle.x + obstacle.emojiSize / 2 - 10;
-                o.t = obstacle.y - obstacle.emojiSize / 2 + 10; o.b = obstacle.y + obstacle.emojiSize / 2 - 10;
-            }
-            return p.r > o.l && p.l < o.r && p.b > o.t && p.t < o.b;
-        }
-
-        function handleInput(event) {
-            if (gameState === 'playing' && player) {
-                event.preventDefault();
-                player.flap();
+            
+            stopPolling() {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
             }
         }
-        function resizeCanvas() {
-            canvas.width = gameContainer.clientWidth; canvas.height = gameContainer.clientHeight;
-            canvasWidth = canvas.width; canvasHeight = canvas.height;
-        }
-
-        function setupLobby() {
-            colorSelector.innerHTML = '';
-            for (const hue of colors) {
-                const colorBox = document.createElement('div');
-                colorBox.className = 'color-box';
-                colorBox.dataset.color = JSON.stringify(hue);
+        
+        const multiplayer = new SimpleMultiplayer();
+        
+        // Game objects
+        class Player {
+            constructor() {
+                this.x = 80;
+                this.y = 300;
+                this.velocity = 0;
+                this.gravity = 0.5;
+                this.jumpPower = -8;
+                this.size = 20;
+                this.color = '#ff6b35';
+                this.eliminated = false;
+                this.hasStarted = false; // New: player doesn't fall until first input
+            }
+            
+            update() {
+                if (this.eliminated) return;
                 
-                if (hue === null) {
-                    colorBox.textContent = '💩';
-                    colorBox.style.backgroundColor = '#7a5230';
+                // BULLETPROOF: Only apply gravity AFTER first flap
+                if (gravityActive) {
+                    this.velocity += this.gravity;
+                    this.y += this.velocity;
+                    
+                    // Check boundaries
+                    if (this.y < 0) this.y = 0;
+                    if (this.y > canvas.height - this.size) {
+                        this.eliminated = true;
+                        playFartSound();
+                        endGame();
+                    }
                 } else {
-                    colorBox.style.backgroundColor = `hsl(${hue}, 80%, 50%)`;
+                    // Float gently until first flap - NO GRAVITY
+                    this.y = 300 + Math.sin(frameCount * 0.05) * 8;
+                    this.velocity = 0;
                 }
-                
-                if (hue === selectedColor) colorBox.classList.add('selected');
-                
-                colorSelector.appendChild(colorBox);
+            }
+            
+            flap() {
+                if (!this.eliminated) {
+                    console.log('FLAP! gravityActive:', gravityActive, '->', true);
+                    gravityActive = true; // BULLETPROOF: Activate gravity on first flap
+                    this.velocity = this.jumpPower;
+                    playFlapSound();
+                }
+            }
+            
+            draw() {
+                // Clean poop emoji only
+                ctx.font = '20px Arial';
+                ctx.fillText('💩', this.x, this.y);
             }
         }
         
-        // --- Event Listeners & Init ---
-        function handleColorSelect(event) {
-            event.preventDefault();
-            const target = event.target.closest('.color-box');
-            if (!target) return;
-        
-            if (document.querySelector('.color-box.selected')) {
-                document.querySelector('.color-box.selected').classList.remove('selected');
+        class Obstacle {
+            constructor(x) {
+                this.x = x;
+                this.width = 50;
+                this.gap = 150;
+                this.topHeight = Math.random() * (canvas.height - this.gap - 100) + 50;
+                this.bottomHeight = canvas.height - this.topHeight - this.gap;
+                this.passed = false;
             }
-            target.classList.add('selected');
-            selectedColor = JSON.parse(target.dataset.color);
+            
+            update() {
+                this.x -= 2;
+            }
+            
+            draw() {
+                // Top pipe
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(this.x, 0, this.width, this.topHeight);
+                
+                // Bottom pipe
+                ctx.fillRect(this.x, canvas.height - this.bottomHeight, this.width, this.bottomHeight);
+                
+                // Pipe caps
+                ctx.fillStyle = '#A0522D';
+                ctx.fillRect(this.x - 5, this.topHeight - 20, this.width + 10, 20);
+                ctx.fillRect(this.x - 5, canvas.height - this.bottomHeight, this.width + 10, 20);
+            }
+            
+            checkCollision(player) {
+                if (player.x < this.x + this.width &&
+                    player.x + player.size > this.x &&
+                    (player.y < this.topHeight ||
+                     player.y + player.size > canvas.height - this.bottomHeight)) {
+                    return true;
+                }
+                return false;
+            }
         }
-
-        colorSelector.addEventListener('click', handleColorSelect);
-        colorSelector.addEventListener('touchstart', handleColorSelect, { passive: false });
         
-        startButton.addEventListener('click', startGame);
-        restartButton.addEventListener('click', () => {
+        let player = new Player();
+        let obstacles = [];
+        
+        // Audio system
+        let synth = null;
+        
+        async function initAudio() {
+            if (!audioContextStarted) {
+                await Tone.start();
+                synth = new Tone.Synth().toDestination();
+                audioContextStarted = true;
+            }
+        }
+        
+        function playFlapSound() {
+            if (synth) {
+                synth.triggerAttackRelease('C4', '8n');
+            }
+        }
+        
+        function playFartSound() {
+            if (synth) {
+                synth.triggerAttackRelease('G2', '0.3');
+                setTimeout(() => synth.triggerAttackRelease('F2', '0.2'), 100);
+                setTimeout(() => synth.triggerAttackRelease('E2', '0.1'), 200);
+            }
+        }
+        
+        // Game functions
+        function updateStats() {
+            multiplayer.getStats().then(stats => {
+                document.getElementById('online-count').textContent = stats.onlineCount;
+                document.getElementById('rooms-count').textContent = stats.activeRooms;
+            });
+        }
+        
+        function updateLobbyDisplay() {
+            if (!currentRoom) return;
+            
+            document.getElementById('room-id').textContent = currentRoom.id.slice(-8);
+            document.getElementById('player-count').textContent = currentRoom.players.length;
+            
+            const playerList = document.getElementById('player-list');
+            playerList.innerHTML = currentRoom.players.map(p => 
+                `<div>${p.gamertag} ${p.ready ? '✅' : '⏳'}</div>`
+            ).join('');
+            
+            // Show/hide force start button based on player count
+            const forceStartBtn = document.getElementById('force-start-btn');
+            console.log('Player count:', currentRoom.players.length, 'Show button:', currentRoom.players.length >= 2);
+            if (currentRoom.players.length >= 2) {
+                forceStartBtn.style.display = 'block';
+                forceStartBtn.textContent = `Fly Now! (${currentRoom.players.length} Players) 🚀`;
+            } else {
+                forceStartBtn.style.display = 'none';
+            }
+        }
+        
+        function showGetReady() {
+            // Reset game state but don't start yet
+            score = 0;
+            frameCount = 0;
+            obstacles = [];
+            player = new Player();
+            gravityActive = false; // BULLETPROOF: Reset gravity flag
+            console.log('NEW GAME - gravityActive reset to:', gravityActive);
+            
+            // Hide all other screens
+            modeScreen.style.display = 'none';
+            lobbyScreen.style.display = 'none';
             gameOverScreen.style.display = 'none';
-            init();
-        });
-        window.addEventListener('resize', init);
-        
-        gameContainer.addEventListener('mousedown', handleInput);
-        gameContainer.addEventListener('touchstart', handleInput, { passive: false });
-        
-        window.addEventListener('keydown', (e) => { 
-            if (e.code === 'Space') { 
-                e.preventDefault();
-                if (gameState === 'playing') {
-                    handleInput(e);
-                } else if (gameState === 'lobby' || gameState === 'start') {
-                    startGame();
+            
+            // Show get ready screen
+            getReadyScreen.style.display = 'flex';
+            
+            // Start countdown
+            let countdown = 3;
+            const countdownText = document.getElementById('countdown-text');
+            const countdownInterval = setInterval(() => {
+                if (countdown > 0) {
+                    countdownText.textContent = `Starting in ${countdown}...`;
+                    countdown--;
+                } else {
+                    countdownText.textContent = 'Click or press SPACE to start!';
+                    clearInterval(countdownInterval);
+                    // STOP AUTO-START: Let player click to begin
                 }
-            } 
-        });
-
-        window.addEventListener('touchmove', function (event) {
-            if (event.touches.length > 1) {
-                event.preventDefault();
+            }, 1000);
+        }
+        
+        function startGameNow() {
+            gameState = 'playing'; // SIMPLE: go straight to playing
+            
+            // Hide get ready screen
+            getReadyScreen.style.display = 'none';
+            
+            if (gameMode === 'multiplayer') {
+                multiplayer.startPolling();
             }
-        }, { passive: false });
-
-
-        window.onload = () => {
-            preRenderEmojis();
-            setupLobby();
-            init();
-        };
+            
+            gameLoop();
+        }
+        
+        function startGame() {
+            showGetReady();
+        }
+        
+        function endGame() {
+            gameState = 'game-over';
+            multiplayer.stopPolling();
+            
+            document.getElementById('final-score').textContent = `Score: ${score}`;
+            document.getElementById('game-over-title').textContent = 
+                gameMode === 'multiplayer' ? 'Sewer Survival Complete!' : 'Game Over!';
+            
+            gameOverScreen.style.display = 'flex';
+        }
+        
+        function gameLoop() {
+            if (gameState !== 'playing') return;
+            
+            // Debug: Update state display
+            document.getElementById('debug-state').textContent = gameState + (gravityActive ? ' (gravity)' : ' (floating)');
+            
+            // Clear canvas
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update player
+            player.update();
+            
+            // Generate obstacles (only after gravity starts)
+            if (frameCount % 120 === 0 && gravityActive) {
+                obstacles.push(new Obstacle(canvas.width));
+            }
+            
+            // Update obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update();
+                
+                // Check collision (only when gravity is active)
+                if (gravityActive && obstacles[i].checkCollision(player)) {
+                    player.eliminated = true;
+                    playFartSound();
+                    endGame();
+                    return;
+                }
+                
+                // Score (only when gravity is active)
+                if (gravityActive && !obstacles[i].passed && obstacles[i].x + obstacles[i].width < player.x) {
+                    obstacles[i].passed = true;
+                    score++;
+                }
+                
+                // Remove off-screen obstacles
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+            
+            // Draw everything
+            obstacles.forEach(obstacle => obstacle.draw());
+            player.draw();
+            
+            // BULLETPROOF: Show overlay until first flap
+            if (!gravityActive) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 24px Bangers';
+                ctx.textAlign = 'center';
+                ctx.fillText('🚽 Click or Press SPACE to Start Flying! 💩', canvas.width / 2, canvas.height / 2);
+                ctx.textAlign = 'left';
+            }
+            
+            // Update score display
+            document.getElementById('score').textContent = score;
+            
+            frameCount++;
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Event listeners
+        document.getElementById('single-btn').addEventListener('click', async () => {
+            await initAudio();
+            gameMode = 'single';
+            document.getElementById('connection-status').textContent = 'Single Player';
+            startGame();
+        });
+        
+        document.getElementById('multiplayer-btn').addEventListener('click', async () => {
+            await initAudio();
+            
+            gamertag = gamertagInput.value.trim();
+            if (!gamertag) {
+                alert('Please enter your Sewer Handle!');
+                return;
+            }
+            
+            gameMode = 'multiplayer';
+            playerId = 'player_' + Date.now();
+            
+            try {
+                document.getElementById('connection-status').textContent = 'Connecting...';
+                await multiplayer.joinRoom(gamertag);
+                
+                document.getElementById('connection-status').textContent = 'Connected';
+                modeScreen.style.display = 'none';
+                lobbyScreen.style.display = 'flex';
+                
+                updateLobbyDisplay();
+                multiplayer.startPolling();
+                
+            } catch (error) {
+                alert('Failed to join multiplayer: ' + error.message);
+                document.getElementById('connection-status').textContent = 'Connection Failed';
+            }
+        });
+        
+        document.getElementById('ready-btn').addEventListener('click', async () => {
+            isReady = !isReady;
+            await multiplayer.setReady(isReady);
+            document.getElementById('ready-btn').textContent = isReady ? 'Cancel Ready' : 'Ready to Swim! 🏊‍♂️';
+        });
+        
+        document.getElementById('force-start-btn').addEventListener('click', async () => {
+            // Force start with 2+ players
+            if (currentRoom && currentRoom.players.length >= 2) {
+                console.log('Force starting game with', currentRoom.players.length, 'players');
+                
+                // Set current player ready
+                isReady = true;
+                await multiplayer.setReady(true);
+                document.getElementById('ready-btn').textContent = 'Cancel Ready';
+                
+                // Hide lobby and start game immediately
+                lobbyScreen.style.display = 'none';
+                startGame();
+            }
+        });
+        
+        document.getElementById('leave-btn').addEventListener('click', () => {
+            multiplayer.stopPolling();
+            lobbyScreen.style.display = 'none';
+            modeScreen.style.display = 'flex';
+            gameMode = 'single';
+        });
+        
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            modeScreen.style.display = 'flex';
+        });
+        
+        document.getElementById('start-now-btn').addEventListener('click', () => {
+            startGameNow();
+        });
+        
+        // Input handling
+        function handleInput(event) {
+            if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA')) {
+                return;
+            }
+            event.preventDefault();
+            
+            // If on get-ready screen, start the game
+            if (getReadyScreen.style.display === 'flex') {
+                startGameNow();
+                return;
+            }
+            
+            // BULLETPROOF: Flap only when playing and not eliminated
+            if (gameState === 'playing' && !player.eliminated) {
+                player.flap(); // This activates gravity automatically
+            }
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') handleInput(e);
+        });
+        
+        document.addEventListener('touchstart', handleInput);
+        document.addEventListener('click', handleInput);
+        
+        // Initialize
+        updateStats();
+        setInterval(updateStats, 10000);
     </script>
 </body>
 </html>
-
