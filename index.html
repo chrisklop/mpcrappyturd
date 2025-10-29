@@ -73,6 +73,7 @@
         <!-- HUD -->
         <div id="hud">
             <div>Score: <span id="score">0</span></div>
+            <div id="opponent-score" style="display: none;">💩 Rival Turds: <span id="opponent-score-value">0</span></div>
             <div class="status" id="connection-status">Offline</div>
             <div class="status">State: <span id="debug-state">menu</span></div>
         </div>
@@ -211,6 +212,30 @@
                 }
             }
             
+            async updateScore(score) {
+                if (!roomId || !playerId) return;
+                
+                try {
+                    const response = await fetch(API_BASE + '?action=updateScore', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: roomId,
+                            playerId: playerId,
+                            score: score
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        currentRoom = data.room;
+                        updateOpponentScore();
+                    }
+                } catch (error) {
+                    console.error('Failed to update score:', error);
+                }
+            }
+            
             async pollRoom() {
                 if (!roomId) return;
                 
@@ -220,6 +245,7 @@
                     if (response.ok) {
                         currentRoom = data.room;
                         updateLobbyDisplay();
+                        updateOpponentScore(); // Update opponent scores during polling
                         
                         // Check if game should start
                         if (currentRoom.status === 'starting' && gameState === 'menu') {
@@ -407,6 +433,25 @@
             }
         }
         
+        function updateOpponentScore() {
+            if (!currentRoom || gameMode !== 'multiplayer') return;
+            
+            const opponentScoreDiv = document.getElementById('opponent-score');
+            const opponentScoreValue = document.getElementById('opponent-score-value');
+            
+            // Find opponents (players that aren't me)
+            const opponents = currentRoom.players.filter(p => p.id !== playerId);
+            
+            if (opponents.length > 0) {
+                // Show highest opponent score with fun poop pun
+                const highestOpponentScore = Math.max(...opponents.map(p => p.currentScore || 0));
+                opponentScoreValue.textContent = highestOpponentScore;
+                opponentScoreDiv.style.display = 'block';
+            } else {
+                opponentScoreDiv.style.display = 'none';
+            }
+        }
+        
         function showGetReady() {
             // Reset game state but don't start yet
             score = 0;
@@ -507,6 +552,11 @@
                 if (gameStarted && !obstacles[i].passed && obstacles[i].x + obstacles[i].width < player.x) {
                     obstacles[i].passed = true;
                     score++;
+                    
+                    // Update score in multiplayer
+                    if (gameMode === 'multiplayer') {
+                        multiplayer.updateScore(score);
+                    }
                 }
                 
                 // Remove off-screen obstacles

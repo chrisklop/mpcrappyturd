@@ -74,6 +74,7 @@ export default async function handler(req, res) {
           color,
           ready: false,
           score: 0,
+          currentScore: 0, // Live score during gameplay
           eliminated: false,
           joinedAt: Date.now()
         };
@@ -117,6 +118,25 @@ export default async function handler(req, res) {
             }
             
             res.status(200).json({ room, allReady });
+            return;
+          }
+        }
+        
+        res.status(404).json({ error: 'Room or player not found' });
+        return;
+      }
+      
+      if (action === 'updateScore') {
+        const { roomId, playerId, score } = req.body;
+        const room = rooms.get(roomId);
+        
+        if (room) {
+          const player = room.players.find(p => p.id === playerId);
+          if (player) {
+            player.currentScore = score;
+            room.lastActivity = Date.now();
+            
+            res.status(200).json({ room });
             return;
           }
         }
