@@ -443,6 +443,12 @@
         function startGameNow() {
             gameState = 'playing'; // SIMPLE: go straight to playing
             
+            // CRITICAL: Ensure player is floating when game starts
+            player.y = 300;
+            player.velocity = 0;
+            gravityActive = false; // ENSURE gravity is off when game starts
+            console.log('GAME STARTING - gravityActive reset to:', gravityActive);
+            
             // Hide get ready screen
             getReadyScreen.style.display = 'none';
             
