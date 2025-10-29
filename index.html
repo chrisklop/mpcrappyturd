@@ -136,11 +136,8 @@
         let gameMode = 'single'; // 'single' or 'multiplayer'
         let score = 0;
         let frameCount = 0;
-        let gravityActive = false; // BULLETPROOF: gravity only starts after countdown
-        let countdownActive = false; // NEW: countdown in progress
-        let countdownValue = 0; // NEW: current countdown number
-        let gracePeriodFrames = 0; // NEW: frames of reduced gravity after countdown
-        console.log('GAME LOADED - gravityActive:', gravityActive);
+        let gameStarted = false; // SIMPLE: game frozen until first click
+        console.log('GAME LOADED - gameStarted:', gameStarted);
         
         // Multiplayer variables
         let playerId = null;
@@ -279,16 +276,9 @@
             update() {
                 if (this.eliminated) return;
                 
-                // BULLETPROOF: Only apply gravity AFTER countdown
-                if (gravityActive) {
-                    // GRACE PERIOD: Use gentler gravity for first 120 frames (2 seconds)
-                    let currentGravity = this.gravity;
-                    if (gracePeriodFrames > 0) {
-                        currentGravity = this.gravity * 0.3; // Much gentler gravity
-                        gracePeriodFrames--;
-                    }
-                    
-                    this.velocity += currentGravity;
+                // SIMPLE: Only apply physics AFTER first click
+                if (gameStarted) {
+                    this.velocity += this.gravity;
                     this.y += this.velocity;
                     
                     // Check boundaries
@@ -299,15 +289,15 @@
                         endGame();
                     }
                 } else {
-                    // Float gently until countdown starts - NO GRAVITY
-                    this.y = 300 + Math.sin(frameCount * 0.05) * 8;
+                    // FROZEN: Player completely still until first click
+                    this.y = 300;
                     this.velocity = 0;
                 }
             }
             
             flap() {
-                if (!this.eliminated && gravityActive) {
-                    console.log('FLAP! (gravity active)');
+                if (!this.eliminated && gameStarted) {
+                    console.log('FLAP!');
                     this.velocity = this.jumpPower;
                     playFlapSound();
                 }
@@ -452,14 +442,11 @@
         function startGameNow() {
             gameState = 'playing'; // SIMPLE: go straight to playing
             
-            // CRITICAL: Ensure player is floating when game starts
+            // RESET: Ensure clean start
             player.y = 300;
             player.velocity = 0;
-            gravityActive = false; // ENSURE gravity is off when game starts
-            countdownActive = false; // Reset countdown
-            countdownValue = 0;
-            gracePeriodFrames = 0; // Reset grace period
-            console.log('GAME STARTING - gravityActive reset to:', gravityActive);
+            gameStarted = false; // Game frozen until first click
+            console.log('GAME STARTING - gameStarted reset to:', gameStarted);
             
             // Hide get ready screen
             getReadyScreen.style.display = 'none';
@@ -469,30 +456,6 @@
             }
             
             gameLoop();
-        }
-        
-        function startCountdown() {
-            if (countdownActive) return; // Prevent multiple countdowns
-            
-            countdownActive = true;
-            countdownValue = 3;
-            console.log('COUNTDOWN STARTING:', countdownValue);
-            
-            const countdownInterval = setInterval(() => {
-                countdownValue--;
-                console.log('COUNTDOWN:', countdownValue);
-                
-                if (countdownValue <= 0) {
-                    clearInterval(countdownInterval);
-                    countdownActive = false;
-                    gravityActive = true;
-                    
-                    // GRACE PERIOD: Give player a gentle upward boost and reduced gravity
-                    player.velocity = -3; // Gentle upward motion
-                    gracePeriodFrames = 120; // 2 seconds of gentler gravity at 60fps
-                    console.log('GRAVITY ACTIVATED with gentle boost and grace period!');
-                }
-            }, 1000);
         }
         
         function startGame() {
@@ -514,7 +477,7 @@
             if (gameState !== 'playing') return;
             
             // Debug: Update state display
-            document.getElementById('debug-state').textContent = gameState + (gravityActive ? ' (gravity)' : ' (floating)');
+            document.getElementById('debug-state').textContent = gameState + (gameStarted ? ' (active)' : ' (frozen)');
             
             // Clear canvas
             ctx.fillStyle = '#87CEEB';
@@ -523,8 +486,8 @@
             // Update player
             player.update();
             
-            // Generate obstacles (only after gravity starts)
-            if (frameCount % 120 === 0 && gravityActive) {
+            // Generate obstacles (only after game starts)
+            if (frameCount % 120 === 0 && gameStarted) {
                 obstacles.push(new Obstacle(canvas.width));
             }
             
@@ -532,16 +495,16 @@
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 obstacles[i].update();
                 
-                // Check collision (only when gravity is active)
-                if (gravityActive && obstacles[i].checkCollision(player)) {
+                // Check collision (only when game started)
+                if (gameStarted && obstacles[i].checkCollision(player)) {
                     player.eliminated = true;
                     playFartSound();
                     endGame();
                     return;
                 }
                 
-                // Score (only when gravity is active)
-                if (gravityActive && !obstacles[i].passed && obstacles[i].x + obstacles[i].width < player.x) {
+                // Score (only when game started)
+                if (gameStarted && !obstacles[i].passed && obstacles[i].x + obstacles[i].width < player.x) {
                     obstacles[i].passed = true;
                     score++;
                 }
@@ -556,26 +519,15 @@
             obstacles.forEach(obstacle => obstacle.draw());
             player.draw();
             
-            // COUNTDOWN OVERLAY: Show different messages based on state
-            if (!gravityActive) {
+            // SIMPLE OVERLAY: Show message until first click
+            if (!gameStarted) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 24px Bangers';
                 ctx.textAlign = 'center';
-                
-                if (countdownActive) {
-                    // Show countdown
-                    ctx.font = 'bold 48px Bangers';
-                    ctx.fillText(countdownValue, canvas.width / 2, canvas.height / 2);
-                    ctx.font = 'bold 20px Bangers';
-                    ctx.fillText('Get Ready!', canvas.width / 2, canvas.height / 2 + 60);
-                } else {
-                    // Show click to start message
-                    ctx.fillText('🚽 Click or Press SPACE to Start Flying! 💩', canvas.width / 2, canvas.height / 2);
-                }
-                
+                ctx.fillText('🚽 Click or Press SPACE to Start Flying! 💩', canvas.width / 2, canvas.height / 2);
                 ctx.textAlign = 'left';
             }
             
@@ -674,15 +626,15 @@
                 return;
             }
             
-            // NEW LOGIC: Start countdown on first click, then allow flapping
+            // SIMPLE: Start game on first click, then flap
             if (gameState === 'playing' && !player.eliminated) {
-                if (!gravityActive && !countdownActive) {
-                    // First click starts countdown
-                    startCountdown();
-                } else if (gravityActive) {
-                    // After countdown, allow flapping
-                    player.flap();
+                if (!gameStarted) {
+                    // First click starts the game
+                    gameStarted = true;
+                    console.log('GAME STARTED by first click!');
                 }
+                // Always allow flapping once game started
+                player.flap();
             }
         }
         
