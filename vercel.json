@@ -1,12 +1,5 @@
 {
   "version": 2,
-  "name": "flappy-turd-multiplayer",
-  "builds": [
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    }
-  ],
   "routes": [
     {
       "src": "/api/(.*)",
