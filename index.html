@@ -139,6 +139,7 @@
         let gravityActive = false; // BULLETPROOF: gravity only starts after countdown
         let countdownActive = false; // NEW: countdown in progress
         let countdownValue = 0; // NEW: current countdown number
+        let gracePeriodFrames = 0; // NEW: frames of reduced gravity after countdown
         console.log('GAME LOADED - gravityActive:', gravityActive);
         
         // Multiplayer variables
@@ -278,9 +279,16 @@
             update() {
                 if (this.eliminated) return;
                 
-                // BULLETPROOF: Only apply gravity AFTER first flap
+                // BULLETPROOF: Only apply gravity AFTER countdown
                 if (gravityActive) {
-                    this.velocity += this.gravity;
+                    // GRACE PERIOD: Use gentler gravity for first 120 frames (2 seconds)
+                    let currentGravity = this.gravity;
+                    if (gracePeriodFrames > 0) {
+                        currentGravity = this.gravity * 0.3; // Much gentler gravity
+                        gracePeriodFrames--;
+                    }
+                    
+                    this.velocity += currentGravity;
                     this.y += this.velocity;
                     
                     // Check boundaries
@@ -291,7 +299,7 @@
                         endGame();
                     }
                 } else {
-                    // Float gently until first flap - NO GRAVITY
+                    // Float gently until countdown starts - NO GRAVITY
                     this.y = 300 + Math.sin(frameCount * 0.05) * 8;
                     this.velocity = 0;
                 }
@@ -450,6 +458,7 @@
             gravityActive = false; // ENSURE gravity is off when game starts
             countdownActive = false; // Reset countdown
             countdownValue = 0;
+            gracePeriodFrames = 0; // Reset grace period
             console.log('GAME STARTING - gravityActive reset to:', gravityActive);
             
             // Hide get ready screen
@@ -477,7 +486,11 @@
                     clearInterval(countdownInterval);
                     countdownActive = false;
                     gravityActive = true;
-                    console.log('GRAVITY ACTIVATED!');
+                    
+                    // GRACE PERIOD: Give player a gentle upward boost and reduced gravity
+                    player.velocity = -3; // Gentle upward motion
+                    gracePeriodFrames = 120; // 2 seconds of gentler gravity at 60fps
+                    console.log('GRAVITY ACTIVATED with gentle boost and grace period!');
                 }
             }, 1000);
         }
