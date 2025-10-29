@@ -1,0 +1,7 @@
+server/
+node_modules/
+.git/
+docker-compose.yml
+nginx.conf
+start-local.sh
+*.log

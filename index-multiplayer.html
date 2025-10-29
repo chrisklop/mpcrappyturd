@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Turd: Multiplayer Sewer Survival</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        html, body {
+            overscroll-behavior-y: contain;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            position: fixed;
+        }
+        body {
+            margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+            background-color: #2c3e50; font-family: 'Bangers', cursive;
+            touch-action: manipulation;
+            user-select: none; 
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #game-container {
+            position: relative; width: 100%; max-width: 400px; height: 100%; max-height: 600px;
+            background-color: #3d3d3d; border: 5px solid #222; border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2); overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; background-color: rgba(0, 0, 0, 0.6); color: white; z-index: 10;
+            padding: 20px; box-sizing: border-box;
+        }
+        h1 { font-size: 3.5rem; text-shadow: 4px 4px 0 #000; margin-bottom: 10px; }
+        h2 { font-size: 2.5rem; text-shadow: 3px 3px 0 #000; margin-bottom: 15px; }
+        p { font-size: 1.5rem; text-shadow: 2px 2px 0 #000; margin: 10px 20px; }
+        .button {
+            font-family: 'Bangers', cursive; font-size: 2rem; padding: 10px 30px;
+            background-color: #27ae60; color: #fff; border: 4px solid #fff; border-radius: 10px;
+            cursor: pointer; text-shadow: 2px 2px 0 #000; box-shadow: 0 5px 0 #1e8449;
+            transition: all 0.1s ease-in-out; margin: 5px;
+        }
+        .button:active { transform: translateY(5px); box-shadow: none; }
+        .button.secondary {
+            background-color: #e74c3c; box-shadow: 0 5px 0 #c0392b;
+        }
+        .button.disabled {
+            background-color: #7f8c8d; box-shadow: 0 5px 0 #5a6c7d;
+            cursor: not-allowed; opacity: 0.6;
+        }
+        
+        #current-score {
+            position: absolute; top: 20px; left: 20px;
+            font-size: 2.5rem; color: #2ecc71; text-shadow: 3px 3px 0 #000; z-index: 5;
+        }
+        #multiplayer-hud {
+            position: absolute; top: 20px; right: 20px;
+            font-size: 1.2rem; color: #fff; text-shadow: 2px 2px 0 #000; z-index: 5;
+            text-align: right;
+        }
+        
+        .lobby-timer {
+            font-size: 1.5rem; color: #f39c12; text-shadow: 2px 2px 0 #000;
+            margin: 10px 0; text-align: center;
+        }
+        
+        .online-status {
+            position: absolute; top: 60px; left: 20px;
+            font-size: 1rem; color: #2ecc71; text-shadow: 2px 2px 0 #000; z-index: 15;
+            background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px;
+        }
+        
+        .input-group { 
+            display: flex; flex-direction: column; align-items: center; width: 90%; max-width: 300px; 
+            margin-bottom: 20px;
+        }
+        .input-group .button { width: 100%; }
+        .input-group input {
+            font-family: 'Bangers', cursive; font-size: 1.5rem; text-align: center;
+            width: 100%; padding: 10px; border-radius: 10px; border: 3px solid #fff;
+            background: #555; color: #fff; margin-bottom: 15px; box-sizing: border-box;
+        }
+        
+        .mode-selector {
+            display: flex; gap: 10px; margin-bottom: 20px;
+        }
+        .mode-selector .button {
+            flex: 1; padding: 15px; font-size: 1.8rem;
+        }
+        
+        .color-selector { 
+            display: flex; justify-content: space-around; width: 100%; margin-bottom: 20px; 
+        }
+        .color-box {
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+            border: 4px solid transparent; transition: border-color 0.2s;
+            display: flex; justify-content: center; align-items: center; font-size: 28px;
+            background-size: contain;
+        }
+        .color-box.selected { border-color: #fff; }
+        
+        #lobby-screen {
+            display: none;
+        }
+        
+        .player-list {
+            background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;
+            margin: 15px 0; width: 90%; max-width: 350px;
+        }
+        .player-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px; margin: 5px 0; background: rgba(255,255,255,0.1);
+            border-radius: 5px; font-size: 1.3rem;
+        }
+        .player-emoji { font-size: 1.5rem; margin-right: 10px; }
+        .ready-indicator {
+            padding: 3px 8px; border-radius: 5px; font-size: 1rem;
+            background: #e74c3c; color: white;
+        }
+        .ready-indicator.ready { background: #27ae60; }
+        
+        .connection-status {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            padding: 5px 15px; border-radius: 15px; font-size: 1rem;
+            background: #e74c3c; color: white; z-index: 15;
+        }
+        .connection-status.connected { background: #27ae60; }
+        
+        .countdown {
+            font-size: 8rem; text-shadow: 5px 5px 0 #000;
+            margin: 50px 0; animation: pulse 1s ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        
+        .final-scores {
+            background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;
+            margin: 15px 0; width: 90%; max-width: 350px;
+        }
+        .score-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px; margin: 5px 0; border-radius: 5px; font-size: 1.2rem;
+        }
+        .score-item:first-child { background: #f1c40f; color: #000; }
+        .score-item:nth-child(2) { background: rgba(192,192,192,0.3); }
+        .score-item:nth-child(3) { background: rgba(205,127,50,0.3); }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="connection-status" class="connection-status">Connecting...</div>
+        <div id="online-status" class="online-status" style="display: none;">
+            <div id="online-count">🌐 Players Online: --</div>
+            <div id="active-rooms">🎮 Active Rooms: --</div>
+        </div>
+        <div id="current-score">Score: 0</div>
+        <div id="multiplayer-hud">
+            <div id="alive-count">Players: 0</div>
+            <div id="ping">Ping: --</div>
+        </div>
+        
+        <!-- Mode Selection Screen -->
+        <div id="mode-screen" class="overlay">
+            <h1>Sewer Survival</h1>
+            <div class="mode-selector">
+                <button class="button" id="single-player-btn">Single Player</button>
+                <button class="button" id="multiplayer-btn">Multiplayer</button>
+            </div>
+            <div class="input-group">
+                <input type="text" id="gamertag-input" placeholder="Enter Your Sewer Handle" maxlength="10">
+                <div class="color-selector" id="color-selector"></div>
+            </div>
+        </div>
+        
+        <!-- Multiplayer Lobby -->
+        <div id="lobby-screen" class="overlay">
+            <h2>Gathering Sewer Rats...</h2>
+            <div class="lobby-timer" id="lobby-timer">⏱️ Waiting: 0:00</div>
+            <div class="player-list" id="player-list"></div>
+            <p id="lobby-status">Searching the sewers...</p>
+            <div class="input-group">
+                <button class="button disabled" id="ready-button">Ready</button>
+                <button class="button secondary" id="leave-lobby-btn">Leave</button>
+                <button class="button" id="force-start-btn" style="display: none;">Start Game (1+ players)</button>
+            </div>
+        </div>
+        
+        <!-- Game Countdown -->
+        <div id="countdown-screen" class="overlay" style="display: none;">
+            <div class="countdown" id="countdown-number">3</div>
+        </div>
+        
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="overlay" style="display: none;">
+            <h1 id="game-result">Game Over!</h1>
+            <div class="final-scores" id="final-scores"></div>
+            <div class="input-group">
+                <button class="button" id="play-again-button">Play Again</button>
+                <button class="button secondary" id="main-menu-button">Main Menu</button>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const SERVER_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : window.location.origin;
+        
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+        const currentScoreDisplay = document.getElementById('current-score');
+        const multiplayerHud = document.getElementById('multiplayer-hud');
+        const connectionStatus = document.getElementById('connection-status');
+        
+        // Screens
+        const modeScreen = document.getElementById('mode-screen');
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const countdownScreen = document.getElementById('countdown-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        
+        // Buttons
+        const singlePlayerBtn = document.getElementById('single-player-btn');
+        const multiplayerBtn = document.getElementById('multiplayer-btn');
+        const readyButton = document.getElementById('ready-button');
+        const leaveLobbyBtn = document.getElementById('leave-lobby-btn');
+        const forceStartBtn = document.getElementById('force-start-btn');
+        const playAgainButton = document.getElementById('play-again-button');
+        const mainMenuButton = document.getElementById('main-menu-button');
+        
+        // Status elements
+        const lobbyTimer = document.getElementById('lobby-timer');
+        const onlineStatus = document.getElementById('online-status');
+        const onlineCount = document.getElementById('online-count');
+        const activeRooms = document.getElementById('active-rooms');
+        
+        // Input elements
+        const gamertagInput = document.getElementById('gamertag-input');
+        const colorSelector = document.getElementById('color-selector');
+        
+        // Game state
+        let gameMode = 'single'; // 'single' or 'multiplayer'
+        let socket = null;
+        let playerId = null;
+        let roomId = null;
+        let isReady = false;
+        let multiplayerPlayers = new Map();
+        let serverObstacles = [];
+        let lastPingTime = 0;
+        let ping = 0;
+        
+        // Lobby management
+        let lobbyStartTime = 0;
+        let lobbyTimerInterval = null;
+        let onlinePlayersCount = 0;
+        let activeRoomsCount = 0;
+        
+        // --- Multiplayer Classes ---
+        class NetworkManager {
+            constructor() {
+                this.socket = null;
+                this.connected = false;
+                this.lastPositionSent = 0;
+                this.positionSendRate = 60; // 60fps
+            }
+            
+            connect() {
+                return new Promise((resolve, reject) => {
+                    const socketOptions = window.location.hostname === 'localhost' ? 
+                        {} : 
+                        { path: '/api/socket' };
+                    
+                    this.socket = io(SERVER_URL, socketOptions);
+                    
+                    this.socket.on('connect', () => {
+                        this.connected = true;
+                        connectionStatus.textContent = 'Connected';
+                        connectionStatus.className = 'connection-status connected';
+                        console.log('Connected to server');
+                        resolve();
+                    });
+                    
+                    this.socket.on('disconnect', () => {
+                        this.connected = false;
+                        connectionStatus.textContent = 'Disconnected';
+                        connectionStatus.className = 'connection-status';
+                        console.log('Disconnected from server');
+                    });
+                    
+                    this.socket.on('connect_error', (error) => {
+                        console.error('Connection error:', error);
+                        connectionStatus.textContent = 'Connection Failed';
+                        reject(error);
+                    });
+                    
+                    // Ping measurement
+                    setInterval(() => {
+                        if (this.connected) {
+                            lastPingTime = Date.now();
+                            this.socket.emit('ping');
+                        }
+                    }, 2000);
+                    
+                    this.socket.on('pong', () => {
+                        ping = Date.now() - lastPingTime;
+                        document.getElementById('ping').textContent = `Ping: ${ping}ms`;
+                    });
+                });
+            }
+            
+            joinQueue(gamertag, color) {
+                return fetch(`${SERVER_URL}/api/join-queue`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gamertag, color })
+                }).then(res => res.json());
+            }
+            
+            joinRoom(roomId, playerId, gamertag, color) {
+                this.socket.emit('join-room', { roomId, playerId, gamertag, color });
+            }
+            
+            setReady(ready) {
+                this.socket.emit('player-ready', { roomId, playerId, ready });
+            }
+            
+            sendPosition(x, y, velocity) {
+                const now = Date.now();
+                if (now - this.lastPositionSent > (1000 / this.positionSendRate)) {
+                    this.socket.emit('player-position', {
+                        roomId, playerId, x, y, velocity, timestamp: now
+                    });
+                    this.lastPositionSent = now;
+                }
+            }
+            
+            reportDeath(score) {
+                this.socket.emit('player-died', {
+                    roomId, playerId, score, timestamp: Date.now()
+                });
+            }
+            
+            requestObstacles() {
+                this.socket.emit('request-obstacles', { roomId });
+            }
+            
+            async getServerStats() {
+                try {
+                    const response = await fetch(`${SERVER_URL}/api/stats`);
+                    return await response.json();
+                } catch (error) {
+                    console.error('Failed to get server stats:', error);
+                    return null;
+                }
+            }
+        }
+        
+        class MultiplayerPlayer {
+            constructor(id, gamertag, color, isLocal = false) {
+                this.id = id;
+                this.gamertag = gamertag;
+                this.color = color;
+                this.isLocal = isLocal;
+                this.x = 100;
+                this.y = 300;
+                this.velocity = 0;
+                this.size = 40;
+                this.eliminated = false;
+                this.score = 0;
+                this.emojiImage = null;
+                this.alpha = 1.0;
+                
+                // Create emoji image
+                this.createEmojiImage();
+            }
+            
+            createEmojiImage() {
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                
+                if (this.color) {
+                    ctx.filter = `hue-rotate(${this.color}deg)`;
+                }
+                
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('💩', 32, 48);
+                
+                this.emojiImage = canvas;
+            }
+            
+            update(deltaTime) {
+                if (this.isLocal && !this.eliminated) {
+                    this.velocity += gravity * deltaTime;
+                    this.y += this.velocity * deltaTime;
+                    
+                    if (this.y - this.size / 2 < 0) {
+                        this.y = this.size / 2;
+                        this.velocity = 0;
+                    }
+                    
+                    // Send position to server
+                    if (networkManager && networkManager.connected) {
+                        networkManager.sendPosition(this.x, this.y, this.velocity);
+                    }
+                }
+            }
+            
+            updateFromNetwork(x, y, velocity) {
+                if (!this.isLocal) {
+                    // Smooth interpolation for network players
+                    this.x = this.x * 0.8 + x * 0.2;
+                    this.y = this.y * 0.8 + y * 0.2;
+                    this.velocity = velocity;
+                }
+            }
+            
+            draw() {
+                if (this.eliminated) {
+                    ctx.globalAlpha = 0.3;
+                }
+                
+                // Draw player emoji
+                ctx.drawImage(this.emojiImage, this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+                
+                // Draw gamertag
+                ctx.font = `14px Bangers`;
+                ctx.fillStyle = this.isLocal ? '#2ecc71' : 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                const textY = this.y - this.size / 1.5;
+                ctx.strokeText(this.gamertag, this.x, textY);
+                ctx.fillText(this.gamertag, this.x, textY);
+                
+                if (this.eliminated) {
+                    ctx.globalAlpha = 1.0;
+                }
+            }
+            
+            flap() {
+                if (this.isLocal && !this.eliminated) {
+                    this.velocity = flapStrength;
+                    if (flapSound) {
+                        flapSound.triggerAttackRelease("G4", "8n", Tone.now());
+                        flapSound.frequency.rampTo("B4", 0.1);
+                    }
+                }
+            }
+            
+            eliminate() {
+                this.eliminated = true;
+                if (this.isLocal && networkManager) {
+                    networkManager.reportDeath(this.score);
+                }
+            }
+        }
+        
+        // --- Obstacle Class ---
+        class Obstacle {
+            constructor(config) {
+                this.x = canvasWidth + 50;
+                this.type = config.type; 
+                this.visual = config.visual;
+                this.position = config.position; 
+                this.passed = false;
+                this.emojiSize = 60; 
+                this.pipeWidth = 80; 
+                this.pipeCapHeight = 30;
+                this.y = canvasHeight * this.position;
+            }
+            
+            draw() {
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle';
+                if (this.visual === 'pipe') this.drawPipe();
+                else if (this.visual === 'rat') this.drawCreature('🐀');
+                else if (this.visual === 'gator') this.drawCreature('🐊');
+            }
+            
+            drawPipe() {
+                ctx.fillStyle = '#8a8a8a'; 
+                const capX = this.x - this.pipeWidth / 2;
+                if (this.type === 'top') {
+                    ctx.fillRect(capX, 0, this.pipeWidth, this.y); 
+                    ctx.fillStyle = '#6e6e6e';
+                    ctx.fillRect(capX - 10, this.y - this.pipeCapHeight, this.pipeWidth + 20, this.pipeCapHeight);
+                } else {
+                    ctx.fillRect(capX, this.y, this.pipeWidth, canvasHeight - this.y); 
+                    ctx.fillStyle = '#6e6e6e';
+                    ctx.fillRect(capX - 10, this.y, this.pipeWidth + 20, this.pipeCapHeight);
+                }
+            }
+            
+            drawCreature(emoji) {
+                ctx.font = `${this.emojiSize}px sans-serif`;
+                if (this.type === 'top') {
+                    ctx.save(); 
+                    ctx.translate(this.x, this.y); 
+                    ctx.scale(1, -1); 
+                    ctx.fillText(emoji, 0, 0); 
+                    ctx.restore();
+                } else {
+                    ctx.fillText(emoji, this.x, this.y);
+                }
+            }
+            
+            update(deltaTime) { 
+                this.x += obstacleSpeed * deltaTime; 
+            }
+        }
+        
+        // --- Splat Class ---
+        class Splat {
+            constructor(x, y) { 
+                this.x = x; 
+                this.y = y; 
+                this.radius = 25; 
+                this.points = 10; 
+                this.pointOffsets = []; 
+                for (let i = 0; i < this.points; i++) { 
+                    this.pointOffsets.push(Math.random() * 15 - 7.5); 
+                } 
+            }
+            
+            draw() { 
+                ctx.fillStyle = '#7a5230'; 
+                ctx.beginPath(); 
+                ctx.moveTo(this.x + this.radius + this.pointOffsets[0], this.y); 
+                for (let i = 1; i <= this.points; i++) { 
+                    const angle = (i / this.points) * 2 * Math.PI; 
+                    const r = this.radius + this.pointOffsets[i % this.points]; 
+                    const px = this.x + r * Math.cos(angle); 
+                    const py = this.y + r * Math.sin(angle); 
+                    ctx.lineTo(px, py); 
+                } 
+                ctx.closePath(); 
+                ctx.fill(); 
+            }
+        }
+        
+        // --- Initialize Network Manager ---
+        const networkManager = new NetworkManager();
+        
+        // --- Original game code (simplified for space) ---
+        let canvasWidth, canvasHeight;
+        const gravity = 980;
+        const flapStrength = -350;
+        let obstacleSpeed = -180;
+        const colors = [null, 30, 60, 120, 180, 240, 300];
+        let selectedColor = colors[0];
+        
+        let player, obstacles, score, gameState, animationFrameId;
+        let backgroundOffset = 0;
+        let lastFrameTime = performance.now();
+        let timeSinceLastObstacle = 0;
+        let splat = null;
+        
+        // Sound setup
+        let flapSound, pointSound, fartSound;
+        
+        function initializeSounds() {
+            if (typeof Tone === 'undefined') return;
+            
+            // Wing flap sound
+            flapSound = new Tone.Synth({ 
+                oscillator: { type: "triangle" }, 
+                envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 } 
+            }).toDestination();
+            
+            // Scoring sound
+            pointSound = new Tone.Synth({ 
+                oscillator: { type: "sine" }, 
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 } 
+            }).toDestination();
+            
+            // Epic fart sound for death/crash! 💨
+            fartSound = createFartSound();
+        }
+        
+        function createFartSound() {
+            // Create a complex fart sound using multiple Tone.js components
+            const fartSynth = new Tone.NoiseSynth({
+                noise: { type: "brown" },
+                envelope: { 
+                    attack: 0.002,
+                    decay: 0.1, 
+                    sustain: 0.3,
+                    release: 0.8
+                }
+            });
+            
+            // Low-pass filter for that muffled fart quality
+            const filter = new Tone.Filter({
+                frequency: 80,
+                type: "lowpass",
+                rolloff: -24
+            });
+            
+            // Add some distortion for extra grossness
+            const distortion = new Tone.Distortion(0.4);
+            
+            // LFO for that bubbly fart modulation
+            const lfo = new Tone.LFO({
+                frequency: 8,
+                type: "sine"
+            }).start();
+            
+            // Connect the signal chain: synth → filter → distortion → destination
+            fartSynth.connect(filter);
+            filter.connect(distortion);
+            distortion.toDestination();
+            
+            // Modulate the filter frequency for that classic fart wobble
+            lfo.connect(filter.frequency);
+            
+            return {
+                triggerAttack: () => {
+                    // Start the base fart sound
+                    fartSynth.triggerAttack();
+                    
+                    // Add a low-frequency rumble using an oscillator
+                    const rumble = new Tone.Oscillator({
+                        frequency: 60,
+                        type: "sawtooth"
+                    }).toDestination();
+                    
+                    rumble.start();
+                    rumble.stop("+0.4");
+                    
+                    // Add some random pitch bends for realism
+                    setTimeout(() => {
+                        if (filter.frequency) {
+                            filter.frequency.rampTo(120, 0.1);
+                        }
+                    }, 50);
+                    
+                    setTimeout(() => {
+                        if (filter.frequency) {
+                            filter.frequency.rampTo(40, 0.2);
+                        }
+                    }, 150);
+                    
+                    // Release the main fart sound
+                    setTimeout(() => {
+                        fartSynth.triggerRelease();
+                    }, 300);
+                }
+            };
+        }
+        
+        // --- Game Setup ---
+        function init() {
+            resizeCanvas();
+            setupColorSelector();
+            setupEventListeners();
+            showModeScreen();
+            
+            // Initialize sounds on first user interaction
+            document.addEventListener('click', initializeSounds, { once: true });
+            document.addEventListener('touchstart', initializeSounds, { once: true });
+        }
+        
+        function resizeCanvas() {
+            const container = gameContainer.getBoundingClientRect();
+            canvas.width = canvasWidth = container.width;
+            canvas.height = canvasHeight = container.height;
+            ctx.imageSmoothingEnabled = false;
+        }
+        
+        function setupColorSelector() {
+            colorSelector.innerHTML = '';
+            colors.forEach((hue, index) => {
+                const colorBox = document.createElement('div');
+                colorBox.className = 'color-box';
+                
+                if (hue === null) {
+                    colorBox.textContent = '💩';
+                    colorBox.style.backgroundColor = 'transparent';
+                } else {
+                    colorBox.textContent = '💩';
+                    colorBox.style.filter = `hue-rotate(${hue}deg)`;
+                }
+                
+                if (hue === selectedColor) colorBox.classList.add('selected');
+                
+                colorBox.addEventListener('click', () => selectColor(hue));
+                colorSelector.appendChild(colorBox);
+            });
+        }
+        
+        function selectColor(color) {
+            selectedColor = color;
+            document.querySelectorAll('.color-box').forEach(box => box.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+        
+        function setupEventListeners() {
+            // Mode selection
+            singlePlayerBtn.addEventListener('click', () => startSinglePlayer());
+            multiplayerBtn.addEventListener('click', () => startMultiplayer());
+            
+            // Lobby controls
+            readyButton.addEventListener('click', toggleReady);
+            leaveLobbyBtn.addEventListener('click', leaveLobby);
+            forceStartBtn.addEventListener('click', forceStartGame);
+            
+            // Game over controls
+            playAgainButton.addEventListener('click', playAgain);
+            mainMenuButton.addEventListener('click', showModeScreen);
+            
+            // Game controls
+            document.addEventListener('keydown', handleInput);
+            document.addEventListener('click', handleInput);
+            document.addEventListener('touchstart', handleInput);
+            
+            window.addEventListener('resize', resizeCanvas);
+        }
+        
+        // --- Screen Management ---
+        function hideAllScreens() {
+            [modeScreen, lobbyScreen, countdownScreen, gameOverScreen].forEach(screen => {
+                screen.style.display = 'none';
+            });
+        }
+        
+        function showModeScreen() {
+            hideAllScreens();
+            modeScreen.style.display = 'flex';
+            gameState = 'menu';
+            multiplayerHud.style.display = 'none';
+            onlineStatus.style.display = 'block';
+            
+            // Start showing online stats
+            updateOnlineStats();
+            setInterval(updateOnlineStats, 5000); // Update every 5 seconds
+        }
+        
+        function showLobbyScreen() {
+            hideAllScreens();
+            lobbyScreen.style.display = 'flex';
+            gameState = 'lobby';
+            
+            // Start lobby timer
+            lobbyStartTime = Date.now();
+            startLobbyTimer();
+        }
+        
+        function showCountdownScreen() {
+            hideAllScreens();
+            countdownScreen.style.display = 'flex';
+            gameState = 'countdown';
+        }
+        
+        function showGameScreen() {
+            hideAllScreens();
+            gameState = 'playing';
+            multiplayerHud.style.display = gameMode === 'multiplayer' ? 'block' : 'none';
+        }
+        
+        function showGameOverScreen(isWinner = false, finalScores = []) {
+            hideAllScreens();
+            gameOverScreen.style.display = 'flex';
+            gameState = 'gameover';
+            
+            const gameResult = document.getElementById('game-result');
+            if (gameMode === 'multiplayer') {
+                gameResult.textContent = isWinner ? 'Victory!' : 'Game Over!';
+                displayFinalScores(finalScores);
+            } else {
+                gameResult.textContent = 'Wasted!';
+            }
+        }
+        
+        function displayFinalScores(scores) {
+            const finalScoresEl = document.getElementById('final-scores');
+            finalScoresEl.innerHTML = '<h3>Final Scores</h3>';
+            
+            scores.forEach((score, index) => {
+                const scoreItem = document.createElement('div');
+                scoreItem.className = 'score-item';
+                scoreItem.innerHTML = `
+                    <span>#${index + 1} ${score.gamertag}</span>
+                    <span>${score.score}</span>
+                `;
+                finalScoresEl.appendChild(scoreItem);
+            });
+        }
+        
+        // --- Game Mode Functions ---
+        async function startSinglePlayer() {
+            gameMode = 'single';
+            const gamertag = gamertagInput.value.trim() || 'Turd';
+            
+            // Initialize single player game
+            player = new MultiplayerPlayer('local', gamertag, selectedColor, true);
+            obstacles = [];
+            score = 0;
+            timeSinceLastObstacle = 0;
+            splat = null;
+            
+            // Reset background
+            backgroundOffset = 0;
+            
+            showGameScreen();
+            startGameLoop();
+            
+            // Give the player a little boost to start
+            if (player) {
+                player.flap();
+            }
+        }
+        
+        async function startMultiplayer() {
+            gameMode = 'multiplayer';
+            const gamertag = gamertagInput.value.trim() || 'Turd';
+            
+            if (!gamertag) {
+                alert('Please enter your Sewer Handle!');
+                return;
+            }
+            
+            try {
+                // Connect to server
+                await networkManager.connect();
+                
+                // Join matchmaking queue
+                const response = await networkManager.joinQueue(gamertag, selectedColor);
+                playerId = response.playerId;
+                roomId = response.roomId;
+                
+                // Join the room
+                networkManager.joinRoom(roomId, playerId, gamertag, selectedColor);
+                
+                // Setup multiplayer event listeners
+                setupMultiplayerListeners();
+                
+                showLobbyScreen();
+                
+            } catch (error) {
+                console.error('Failed to start multiplayer:', error);
+                alert('Failed to connect to multiplayer server');
+            }
+        }
+        
+        function setupMultiplayerListeners() {
+            const socket = networkManager.socket;
+            
+            socket.on('room-state', (room) => {
+                updatePlayerList(room.players);
+                updateReadyButton();
+            });
+            
+            socket.on('player-joined', (data) => {
+                updateLobbyStatus(`${data.gamertag} entered the sewer (${data.playerCount}/6)`);
+            });
+            
+            socket.on('player-left', (data) => {
+                multiplayerPlayers.delete(data.playerId);
+                updateAliveCount();
+            });
+            
+            socket.on('player-ready-state', (data) => {
+                updatePlayerList();
+            });
+            
+            socket.on('game-starting', (data) => {
+                startCountdown(data.countdown);
+            });
+            
+            socket.on('game-start', () => {
+                startMultiplayerGame();
+            });
+            
+            socket.on('player-update', (data) => {
+                const networkPlayer = multiplayerPlayers.get(data.playerId);
+                if (networkPlayer) {
+                    networkPlayer.updateFromNetwork(data.x, data.y, data.velocity);
+                }
+            });
+            
+            socket.on('player-eliminated', (data) => {
+                const eliminatedPlayer = multiplayerPlayers.get(data.playerId);
+                if (eliminatedPlayer) {
+                    eliminatedPlayer.eliminate();
+                }
+                updateAliveCount();
+            });
+            
+            socket.on('obstacle-sync', (data) => {
+                serverObstacles = data.obstacles;
+            });
+            
+            socket.on('game-over', (data) => {
+                endMultiplayerGame(data.winner, data.finalScores);
+            });
+        }
+        
+        function updatePlayerList(players = []) {
+            const playerList = document.getElementById('player-list');
+            playerList.innerHTML = '';
+            
+            players.forEach(p => {
+                const playerItem = document.createElement('div');
+                playerItem.className = 'player-item';
+                
+                const emoji = selectedColor ? 
+                    `<span class="player-emoji" style="filter: hue-rotate(${p.color || 0}deg)">💩</span>` :
+                    '<span class="player-emoji">💩</span>';
+                
+                playerItem.innerHTML = `
+                    ${emoji}
+                    <span>${p.gamertag}</span>
+                    <span class="ready-indicator ${p.ready ? 'ready' : ''}">${p.ready ? 'Ready' : 'Not Ready'}</span>
+                `;
+                playerList.appendChild(playerItem);
+            });
+        }
+        
+        function updateLobbyStatus(message) {
+            document.getElementById('lobby-status').textContent = message;
+        }
+        
+        function updateReadyButton() {
+            readyButton.classList.remove('disabled');
+            readyButton.textContent = isReady ? 'Not Ready' : 'Ready';
+        }
+        
+        function updateAliveCount() {
+            const aliveCount = Array.from(multiplayerPlayers.values()).filter(p => !p.eliminated).length;
+            document.getElementById('alive-count').textContent = `Alive: ${aliveCount}`;
+        }
+        
+        function toggleReady() {
+            if (readyButton.classList.contains('disabled')) return;
+            
+            isReady = !isReady;
+            networkManager.setReady(isReady);
+            updateReadyButton();
+        }
+        
+        function leaveLobby() {
+            stopLobbyTimer();
+            if (networkManager.socket) {
+                networkManager.socket.disconnect();
+            }
+            showModeScreen();
+        }
+        
+        function startLobbyTimer() {
+            if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
+            
+            lobbyTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - lobbyStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                lobbyTimer.textContent = `⏱️ Waiting: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Show force start button after 30 seconds
+                if (elapsed >= 30) {
+                    forceStartBtn.style.display = 'block';
+                }
+                
+                // Auto-encourage ready state after 60 seconds
+                if (elapsed >= 60 && elapsed % 30 === 0) {
+                    updateLobbyStatus('💨 Getting impatient? Click Ready to start!');
+                }
+            }, 1000);
+        }
+        
+        function stopLobbyTimer() {
+            if (lobbyTimerInterval) {
+                clearInterval(lobbyTimerInterval);
+                lobbyTimerInterval = null;
+            }
+            forceStartBtn.style.display = 'none';
+        }
+        
+        async function updateOnlineStats() {
+            if (!networkManager) return;
+            
+            const stats = await networkManager.getServerStats();
+            if (stats) {
+                onlinePlayersCount = stats.totalPlayers || 0;
+                activeRoomsCount = stats.activeRooms || 0;
+                
+                onlineCount.textContent = `🌐 Players Online: ${onlinePlayersCount}`;
+                activeRooms.textContent = `🎮 Active Rooms: ${activeRoomsCount}`;
+            }
+        }
+        
+        function startCountdown(seconds) {
+            showCountdownScreen();
+            const countdownEl = document.getElementById('countdown-number');
+            
+            let count = seconds;
+            countdownEl.textContent = count;
+            
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else {
+                    countdownEl.textContent = 'GO!';
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        }
+        
+        function startMultiplayerGame() {
+            // Stop lobby timer
+            stopLobbyTimer();
+            
+            // Initialize multiplayer players
+            multiplayerPlayers.clear();
+            
+            // Create local player
+            const gamertag = gamertagInput.value.trim() || 'Turd';
+            player = new MultiplayerPlayer(playerId, gamertag, selectedColor, true);
+            multiplayerPlayers.set(playerId, player);
+            
+            // Initialize game state
+            obstacles = [];
+            score = 0;
+            timeSinceLastObstacle = 0;
+            splat = null;
+            backgroundOffset = 0;
+            
+            // Request initial obstacles from server
+            networkManager.requestObstacles();
+            
+            showGameScreen();
+            startGameLoop();
+            updateAliveCount();
+            
+            // Give the player a little boost to start
+            if (player) {
+                player.flap();
+            }
+        }
+        
+        function endMultiplayerGame(winner, finalScores) {
+            const isWinner = winner && winner.id === playerId;
+            showGameOverScreen(isWinner, finalScores);
+            
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+        }
+        
+        function playAgain() {
+            if (gameMode === 'multiplayer') {
+                startMultiplayer();
+            } else {
+                startSinglePlayer();
+            }
+        }
+        
+        function forceStartGame() {
+            // Force start with current players if waiting too long
+            if (gameMode === 'multiplayer' && networkManager.socket) {
+                // Automatically set ready and try to start
+                if (!isReady) {
+                    toggleReady();
+                }
+                updateLobbyStatus('💨 Forcing game start!');
+                
+                // If still not starting after 3 seconds, try single player
+                setTimeout(() => {
+                    if (gameState === 'lobby') {
+                        updateLobbyStatus('🚽 No other sewer rats found, going solo!');
+                        setTimeout(() => {
+                            leaveLobby();
+                            startSinglePlayer();
+                        }, 2000);
+                    }
+                }, 3000);
+            }
+        }
+        
+        // --- Game Loop ---
+        function startGameLoop() {
+            lastFrameTime = performance.now();
+            gameLoop();
+        }
+        
+        function gameLoop() {
+            if (gameState !== 'playing') return;
+            
+            const currentTime = performance.now();
+            const deltaTime = (currentTime - lastFrameTime) / 1000;
+            lastFrameTime = currentTime;
+            
+            // Update
+            if (gameMode === 'single') {
+                updateSinglePlayer(deltaTime);
+            } else {
+                updateMultiplayer(deltaTime);
+            }
+            
+            // Render
+            render();
+            
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        
+        function updateSinglePlayer(deltaTime) {
+            if (player && !player.eliminated) {
+                player.update(deltaTime);
+                
+                // Generate obstacles
+                timeSinceLastObstacle += deltaTime;
+                if (timeSinceLastObstacle > 1.5) { // obstacleInterval
+                    timeSinceLastObstacle = 0;
+                    const difficulty = Math.min(score / 30, 1);
+                    const type = Math.random() > 0.5 ? 'top' : 'bottom';
+                    let position;
+                    if (type === 'top') {
+                        position = 0.15 + Math.random() * 0.2 + (difficulty * 0.2);
+                    } else {
+                        position = 0.55 + Math.random() * 0.2 + (difficulty * 0.2);
+                    }
+                    let visual = 'pipe';
+                    if (score > 2 && Math.random() > 0.6) visual = 'rat';
+                    if (score > 5 && Math.random() > 0.7) visual = 'gator';
+                    obstacles.push(new Obstacle({ type, visual, position }));
+                }
+                
+                // Update obstacles and check collisions
+                obstacles.forEach((obstacle, index) => {
+                    obstacle.update(deltaTime);
+                    if (checkCollision(player, obstacle)) endGame();
+                    if (!obstacle.passed && obstacle.x < player.x) {
+                        obstacle.passed = true;
+                        score++;
+                        player.score = score;
+                        if (pointSound) {
+                            pointSound.triggerAttackRelease("B5", "32n", Tone.now());
+                            pointSound.triggerAttackRelease("E6", "32n", Tone.now() + 0.05);
+                        }
+                    }
+                    if (obstacle.x < -100) {
+                        obstacles.splice(index, 1);
+                    }
+                });
+                
+                // Check if player fell off screen
+                if (player.y + player.size / 2 > canvasHeight) endGame();
+            }
+        }
+        
+        function updateMultiplayer(deltaTime) {
+            // Update all players
+            multiplayerPlayers.forEach(p => p.update(deltaTime));
+            
+            // For multiplayer, obstacles are synchronized from server
+            // But we still need local obstacle generation for scoring
+            if (player && !player.eliminated) {
+                // Generate obstacles for local scoring (simplified)
+                timeSinceLastObstacle += deltaTime;
+                if (timeSinceLastObstacle > 1.5) {
+                    timeSinceLastObstacle = 0;
+                    const type = Math.random() > 0.5 ? 'top' : 'bottom';
+                    const position = type === 'top' ? 0.3 : 0.7;
+                    obstacles.push(new Obstacle({ type, visual: 'pipe', position }));
+                }
+                
+                // Update local obstacles and score
+                obstacles.forEach((obstacle, index) => {
+                    obstacle.update(deltaTime);
+                    if (!obstacle.passed && obstacle.x < player.x) {
+                        obstacle.passed = true;
+                        score++;
+                        player.score = score;
+                        if (pointSound) {
+                            pointSound.triggerAttackRelease("B5", "32n", Tone.now());
+                        }
+                    }
+                    if (obstacle.x < -100) {
+                        obstacles.splice(index, 1);
+                    }
+                });
+                
+                // Check local player collisions
+                let collision = false;
+                obstacles.forEach(obstacle => {
+                    if (checkCollision(player, obstacle)) {
+                        collision = true;
+                    }
+                });
+                
+                // Check server obstacles too
+                serverObstacles.forEach(obstacle => {
+                    const tempObstacle = {
+                        x: obstacle.x,
+                        visual: 'pipe',
+                        pipeWidth: obstacle.width || 80,
+                        type: obstacle.gapY < canvasHeight / 2 ? 'top' : 'bottom',
+                        y: obstacle.gapY || 200
+                    };
+                    if (checkCollision(player, tempObstacle)) {
+                        collision = true;
+                    }
+                });
+                
+                // Check if player fell off screen or hit obstacle
+                if (collision || player.y + player.size / 2 > canvasHeight) {
+                    endGame();
+                }
+            }
+        }
+        
+        function render() {
+            // Update background animation
+            if (gameState === 'playing' || gameState === 'gameOver') {
+                backgroundOffset -= 60 * ((performance.now() - lastFrameTime) / 1000);
+            }
+            
+            // Clear canvas
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            
+            // Draw background
+            drawSewerBackground();
+            
+            // Draw obstacles
+            if (gameMode === 'multiplayer' && serverObstacles.length > 0) {
+                // Draw server-synchronized obstacles
+                serverObstacles.forEach(obstacle => drawObstacle(obstacle));
+            }
+            if (obstacles && obstacles.length > 0) {
+                obstacles.forEach(obstacle => drawObstacle(obstacle));
+            }
+            
+            // Draw players
+            if (gameMode === 'multiplayer') {
+                multiplayerPlayers.forEach(p => p.draw());
+            } else if (player) {
+                player.draw();
+            }
+            
+            // Draw splat if player died
+            if (splat) {
+                splat.draw();
+            }
+            
+            // Update UI
+            currentScoreDisplay.textContent = `Score: ${score}`;
+        }
+        
+        function drawSewerBackground() {
+            // Animated sewer background
+            ctx.fillStyle = '#4a4a4a'; 
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            const brickWidth = 80, brickHeight = 40, loopWidth = canvasWidth + brickWidth;
+            for (let y = -brickHeight; y < canvasHeight + brickHeight; y += brickHeight) {
+                for (let x = -brickWidth; x < canvasWidth + brickWidth; x += brickWidth) {
+                    let offsetX = (y / brickHeight) % 2 === 0 ? 0 : brickWidth / 2;
+                    let scrolledX = (((x + offsetX + backgroundOffset) % loopWidth) + loopWidth) % loopWidth - brickWidth;
+                    ctx.fillStyle = `hsl(0, 30%, ${25 + Math.abs(Math.sin(x * 0.1 + y * 0.05)) * 10}%)`;
+                    ctx.fillRect(scrolledX, y, brickWidth - 2, brickHeight - 2);
+                }
+            }
+            const gradientTop = ctx.createLinearGradient(0, 0, 0, canvasHeight * 0.4);
+            gradientTop.addColorStop(0, 'rgba(0,0,0,0.7)'); 
+            gradientTop.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = gradientTop; 
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.4);
+            const gradientBottom = ctx.createLinearGradient(0, canvasHeight * 0.6, 0, canvasHeight);
+            gradientBottom.addColorStop(0, 'rgba(0,0,0,0)'); 
+            gradientBottom.addColorStop(1, 'rgba(0,0,0,0.8)');
+            ctx.fillStyle = gradientBottom; 
+            ctx.fillRect(0, canvasHeight * 0.6, canvasWidth, canvasHeight * 0.4);
+            ctx.fillStyle = '#2a5a2a'; 
+            ctx.fillRect(0, canvasHeight - 30, canvasWidth, 30);
+        }
+        
+        function checkCollision(player, obstacle) {
+            const p = { 
+                l: player.x - player.size / 2 + 10, 
+                r: player.x + player.size / 2 - 10, 
+                t: player.y - player.size / 2 + 10, 
+                b: player.y + player.size / 2 - 10 
+            };
+            let o = {};
+            if (obstacle.visual === 'pipe') {
+                o.l = obstacle.x - obstacle.pipeWidth / 2; 
+                o.r = obstacle.x + obstacle.pipeWidth / 2;
+                if (obstacle.type === 'top') { 
+                    o.t = 0; 
+                    o.b = obstacle.y; 
+                } else { 
+                    o.t = obstacle.y; 
+                    o.b = canvasHeight; 
+                }
+            } else {
+                o.l = obstacle.x - obstacle.emojiSize / 2; 
+                o.r = obstacle.x + obstacle.emojiSize / 2;
+                o.t = obstacle.y - obstacle.emojiSize / 2; 
+                o.b = obstacle.y + obstacle.emojiSize / 2;
+            }
+            return p.l < o.r && p.r > o.l && p.t < o.b && p.b > o.t;
+        }
+        
+        function endGame() {
+            if (gameState === 'gameOver') return;
+            gameState = 'gameOver';
+            
+            if (fartSound) {
+                fartSound.triggerAttack();
+            }
+            
+            if (player) {
+                player.eliminated = true;
+                let splatY = player.y; 
+                if (player.y + player.size / 2 >= canvasHeight) { 
+                    splatY = canvasHeight - 15; 
+                }
+                splat = new Splat(player.x, splatY);
+                
+                // Report death for multiplayer
+                if (gameMode === 'multiplayer' && player.isLocal) {
+                    player.eliminate();
+                }
+            }
+            
+            // For single player, show game over screen
+            if (gameMode === 'single') {
+                setTimeout(() => {
+                    showGameOverScreen(false, []);
+                }, 500);
+            }
+        }
+        
+        function drawObstacle(obstacle) {
+            if (obstacle.draw) {
+                obstacle.draw();
+            } else {
+                // Fallback for server obstacles
+                ctx.fillStyle = '#8b4513';
+                ctx.fillRect(obstacle.x, 0, obstacle.width || 80, obstacle.gapY || 200);
+                ctx.fillRect(obstacle.x, (obstacle.gapY || 200) + (obstacle.gapSize || 150), obstacle.width || 80, canvasHeight);
+            }
+        }
+        
+        function handleInput(event) {
+            // Don't prevent default for input fields
+            if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA')) {
+                return;
+            }
+            
+            event.preventDefault();
+            
+            if (gameState === 'playing' && player && !player.eliminated) {
+                player.flap();
+            }
+        }
+        
+        // --- Initialize Game ---
+        window.addEventListener('load', init);
+        
+        // Handle page visibility for multiplayer
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && gameMode === 'multiplayer' && networkManager.connected) {
+                // Pause or handle background state
+            }
+        });
+        
+    </script>
+</body>
+</html>

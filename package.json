@@ -1,0 +1,24 @@
+{
+  "name": "flappy-turd-multiplayer",
+  "version": "1.0.0",
+  "description": "Multiplayer Flappy Turd game",
+  "main": "index.html",
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "build": "echo 'Building for Vercel...'",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5",
+    "redis": "^4.6.10",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.1",
+    "@vercel/kv": "^0.2.0"
+  },
+  "keywords": ["game", "multiplayer", "flappy-bird", "socket.io"],
+  "author": "",
+  "license": "MIT"
+}
