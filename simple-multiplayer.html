@@ -131,7 +131,7 @@
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
         
-        let gameState = 'menu'; // 'menu', 'playing', 'game-over'
+        let gameState = 'menu'; // 'menu', 'waiting-to-start', 'playing', 'game-over'
         let gameMode = 'single'; // 'single' or 'multiplayer'
         let score = 0;
         let frameCount = 0;
@@ -273,8 +273,8 @@
             update() {
                 if (this.eliminated) return;
                 
-                // Don't apply gravity until player has made first input
-                if (this.hasStarted) {
+                // Don't apply gravity until actually playing
+                if (gameState === 'playing') {
                     this.velocity += this.gravity;
                     this.y += this.velocity;
                     
@@ -286,14 +286,13 @@
                         endGame();
                     }
                 } else {
-                    // Gentle hover animation while waiting for first input
+                    // Gentle hover animation while waiting to start
                     this.y = 300 + Math.sin(frameCount * 0.05) * 5;
                 }
             }
             
             flap() {
                 if (!this.eliminated) {
-                    this.hasStarted = true; // Start physics on first input
                     this.velocity = this.jumpPower;
                     playFlapSound();
                 }
@@ -440,7 +439,7 @@
         }
         
         function startGameNow() {
-            gameState = 'playing';
+            gameState = 'waiting-to-start'; // Set to waiting state first
             
             // Hide get ready screen
             getReadyScreen.style.display = 'none';
@@ -468,7 +467,7 @@
         }
         
         function gameLoop() {
-            if (gameState !== 'playing') return;
+            if (gameState !== 'playing' && gameState !== 'waiting-to-start') return;
             
             // Clear canvas
             ctx.fillStyle = '#87CEEB';
@@ -477,8 +476,8 @@
             // Update player
             player.update();
             
-            // Generate obstacles (only after player starts moving)
-            if (frameCount % 120 === 0 && player.hasStarted) {
+            // Generate obstacles (only when actually playing)
+            if (frameCount % 120 === 0 && gameState === 'playing') {
                 obstacles.push(new Obstacle(canvas.width));
             }
             
@@ -510,8 +509,8 @@
             obstacles.forEach(obstacle => obstacle.draw());
             player.draw();
             
-            // Show "Click to Start" message if player hasn't started yet
-            if (!player.hasStarted) {
+            // Show "Click to Start" message if waiting to start
+            if (gameState === 'waiting-to-start') {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
@@ -614,8 +613,11 @@
                 return;
             }
             
-            // Normal gameplay input
-            if (gameState === 'playing' && !player.eliminated) {
+            // Normal gameplay input or start the game
+            if (gameState === 'waiting-to-start') {
+                gameState = 'playing'; // Start the actual game on first input
+                player.flap();
+            } else if (gameState === 'playing' && !player.eliminated) {
                 player.flap();
             }
         }
