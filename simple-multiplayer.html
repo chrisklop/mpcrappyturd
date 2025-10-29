@@ -428,12 +428,8 @@
                 } else {
                     countdownText.textContent = 'Click or press SPACE to start!';
                     clearInterval(countdownInterval);
-                    // Auto-start after countdown, but player can still click to override
-                    setTimeout(() => {
-                        if (gameState !== 'playing') {
-                            startGameNow();
-                        }
-                    }, 1000);
+                    // After countdown, transition to waiting state
+                    startGameNow();
                 }
             }, 1000);
         }
