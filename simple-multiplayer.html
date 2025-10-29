@@ -102,6 +102,14 @@
             <div class="status" id="lobby-status">Waiting for players...</div>
         </div>
 
+        <!-- Get Ready Screen -->
+        <div class="overlay" id="get-ready-screen" style="display: none;">
+            <h2>🚽 Get Ready! 💩</h2>
+            <p>Click or press SPACE to flap through the sewer pipes!</p>
+            <p id="countdown-text">Starting in 3...</p>
+            <button class="button" id="start-now-btn">Start Now!</button>
+        </div>
+
         <!-- Game Over Screen -->
         <div class="overlay" id="game-over-screen" style="display: none;">
             <h2 id="game-over-title">Game Over!</h2>
@@ -138,6 +146,7 @@
         // UI elements
         const modeScreen = document.getElementById('mode-screen');
         const lobbyScreen = document.getElementById('lobby-screen');
+        const getReadyScreen = document.getElementById('get-ready-screen');
         const gameOverScreen = document.getElementById('game-over-screen');
         const gamertagInput = document.getElementById('gamertag-input');
         
@@ -378,22 +387,56 @@
             ).join('');
         }
         
-        function startGame() {
-            gameState = 'playing';
+        function showGetReady() {
+            // Reset game state but don't start yet
             score = 0;
             frameCount = 0;
             obstacles = [];
             player = new Player();
             
+            // Hide all other screens
             modeScreen.style.display = 'none';
             lobbyScreen.style.display = 'none';
             gameOverScreen.style.display = 'none';
+            
+            // Show get ready screen
+            getReadyScreen.style.display = 'flex';
+            
+            // Start countdown
+            let countdown = 3;
+            const countdownText = document.getElementById('countdown-text');
+            const countdownInterval = setInterval(() => {
+                if (countdown > 0) {
+                    countdownText.textContent = `Starting in ${countdown}...`;
+                    countdown--;
+                } else {
+                    countdownText.textContent = 'Click or press SPACE to start!';
+                    clearInterval(countdownInterval);
+                    // Auto-start after countdown, but player can still click to override
+                    setTimeout(() => {
+                        if (gameState !== 'playing') {
+                            startGameNow();
+                        }
+                    }, 1000);
+                }
+            }, 1000);
+        }
+        
+        function startGameNow() {
+            gameState = 'playing';
+            
+            // Hide get ready screen
+            getReadyScreen.style.display = 'none';
             
             if (gameMode === 'multiplayer') {
                 multiplayer.startPolling();
             }
             
             gameLoop();
+        }
+        
+        function startGame() {
+            showGetReady();
         }
         
         function endGame() {
@@ -512,12 +555,24 @@
             modeScreen.style.display = 'flex';
         });
         
+        document.getElementById('start-now-btn').addEventListener('click', () => {
+            startGameNow();
+        });
+        
         // Input handling
         function handleInput(event) {
             if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA')) {
                 return;
             }
             event.preventDefault();
+            
+            // If on get-ready screen, start the game
+            if (getReadyScreen.style.display === 'flex') {
+                startGameNow();
+                return;
+            }
+            
+            // Normal gameplay input
             if (gameState === 'playing' && !player.eliminated) {
                 player.flap();
             }
