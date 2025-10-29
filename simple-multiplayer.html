@@ -289,7 +289,7 @@
                         endGame();
                     }
                 } else {
-                    // Hover until first input
+                    // Hover until first input - GRAVITY DELAY ACTIVE
                     this.y = 300 + Math.sin(frameCount * 0.05) * 5;
                     this.velocity = 0;
                 }
@@ -305,12 +305,9 @@
             }
             
             draw() {
-                ctx.fillStyle = this.eliminated ? '#666' : this.color;
-                ctx.fillRect(this.x, this.y, this.size, this.size);
-                
-                // Draw poop emoji
-                ctx.font = '16px Arial';
-                ctx.fillText('💩', this.x + 2, this.y + 16);
+                // Just draw poop emoji, no red square
+                ctx.font = '20px Arial';
+                ctx.fillText('💩', this.x, this.y);
             }
         }
         
@@ -402,8 +399,10 @@
             
             // Show/hide force start button based on player count
             const forceStartBtn = document.getElementById('force-start-btn');
+            console.log('Player count:', currentRoom.players.length, 'Show button:', currentRoom.players.length >= 2);
             if (currentRoom.players.length >= 2) {
                 forceStartBtn.style.display = 'block';
+                forceStartBtn.textContent = `Fly Now! (${currentRoom.players.length} Players) 🚀`;
             } else {
                 forceStartBtn.style.display = 'none';
             }
