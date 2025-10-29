@@ -136,7 +136,9 @@
         let gameMode = 'single'; // 'single' or 'multiplayer'
         let score = 0;
         let frameCount = 0;
-        let gravityActive = false; // BULLETPROOF: gravity only starts after first input
+        let gravityActive = false; // BULLETPROOF: gravity only starts after countdown
+        let countdownActive = false; // NEW: countdown in progress
+        let countdownValue = 0; // NEW: current countdown number
         console.log('GAME LOADED - gravityActive:', gravityActive);
         
         // Multiplayer variables
@@ -296,9 +298,8 @@
             }
             
             flap() {
-                if (!this.eliminated) {
-                    console.log('FLAP! gravityActive:', gravityActive, '->', true);
-                    gravityActive = true; // BULLETPROOF: Activate gravity on first flap
+                if (!this.eliminated && gravityActive) {
+                    console.log('FLAP! (gravity active)');
                     this.velocity = this.jumpPower;
                     playFlapSound();
                 }
@@ -447,6 +448,8 @@
             player.y = 300;
             player.velocity = 0;
             gravityActive = false; // ENSURE gravity is off when game starts
+            countdownActive = false; // Reset countdown
+            countdownValue = 0;
             console.log('GAME STARTING - gravityActive reset to:', gravityActive);
             
             // Hide get ready screen
@@ -457,6 +460,26 @@
             }
             
             gameLoop();
+        }
+        
+        function startCountdown() {
+            if (countdownActive) return; // Prevent multiple countdowns
+            
+            countdownActive = true;
+            countdownValue = 3;
+            console.log('COUNTDOWN STARTING:', countdownValue);
+            
+            const countdownInterval = setInterval(() => {
+                countdownValue--;
+                console.log('COUNTDOWN:', countdownValue);
+                
+                if (countdownValue <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownActive = false;
+                    gravityActive = true;
+                    console.log('GRAVITY ACTIVATED!');
+                }
+            }, 1000);
         }
         
         function startGame() {
@@ -520,7 +543,7 @@
             obstacles.forEach(obstacle => obstacle.draw());
             player.draw();
             
-            // BULLETPROOF: Show overlay until first flap
+            // COUNTDOWN OVERLAY: Show different messages based on state
             if (!gravityActive) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -528,7 +551,18 @@
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 24px Bangers';
                 ctx.textAlign = 'center';
-                ctx.fillText('🚽 Click or Press SPACE to Start Flying! 💩', canvas.width / 2, canvas.height / 2);
+                
+                if (countdownActive) {
+                    // Show countdown
+                    ctx.font = 'bold 48px Bangers';
+                    ctx.fillText(countdownValue, canvas.width / 2, canvas.height / 2);
+                    ctx.font = 'bold 20px Bangers';
+                    ctx.fillText('Get Ready!', canvas.width / 2, canvas.height / 2 + 60);
+                } else {
+                    // Show click to start message
+                    ctx.fillText('🚽 Click or Press SPACE to Start Flying! 💩', canvas.width / 2, canvas.height / 2);
+                }
+                
                 ctx.textAlign = 'left';
             }
             
@@ -627,9 +661,15 @@
                 return;
             }
             
-            // BULLETPROOF: Flap only when playing and not eliminated
+            // NEW LOGIC: Start countdown on first click, then allow flapping
             if (gameState === 'playing' && !player.eliminated) {
-                player.flap(); // This activates gravity automatically
+                if (!gravityActive && !countdownActive) {
+                    // First click starts countdown
+                    startCountdown();
+                } else if (gravityActive) {
+                    // After countdown, allow flapping
+                    player.flap();
+                }
             }
         }
         
