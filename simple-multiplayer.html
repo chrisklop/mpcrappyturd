@@ -267,25 +267,33 @@
                 this.size = 20;
                 this.color = '#ff6b35';
                 this.eliminated = false;
+                this.hasStarted = false; // New: player doesn't fall until first input
             }
             
             update() {
                 if (this.eliminated) return;
                 
-                this.velocity += this.gravity;
-                this.y += this.velocity;
-                
-                // Check boundaries
-                if (this.y < 0) this.y = 0;
-                if (this.y > canvas.height - this.size) {
-                    this.eliminated = true;
-                    playFartSound();
-                    endGame();
+                // Don't apply gravity until player has made first input
+                if (this.hasStarted) {
+                    this.velocity += this.gravity;
+                    this.y += this.velocity;
+                    
+                    // Check boundaries
+                    if (this.y < 0) this.y = 0;
+                    if (this.y > canvas.height - this.size) {
+                        this.eliminated = true;
+                        playFartSound();
+                        endGame();
+                    }
+                } else {
+                    // Gentle hover animation while waiting for first input
+                    this.y = 300 + Math.sin(frameCount * 0.05) * 5;
                 }
             }
             
             flap() {
                 if (!this.eliminated) {
+                    this.hasStarted = true; // Start physics on first input
                     this.velocity = this.jumpPower;
                     playFlapSound();
                 }
@@ -469,8 +477,8 @@
             // Update player
             player.update();
             
-            // Generate obstacles
-            if (frameCount % 120 === 0) {
+            // Generate obstacles (only after player starts moving)
+            if (frameCount % 120 === 0 && player.hasStarted) {
                 obstacles.push(new Obstacle(canvas.width));
             }
             
@@ -501,6 +509,18 @@
             // Draw everything
             obstacles.forEach(obstacle => obstacle.draw());
             player.draw();
+            
+            // Show "Click to Start" message if player hasn't started yet
+            if (!player.hasStarted) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 24px Bangers';
+                ctx.textAlign = 'center';
+                ctx.fillText('🚽 Click or Press SPACE to Start! 💩', canvas.width / 2, canvas.height / 2);
+                ctx.textAlign = 'left';
+            }
             
             // Update score display
             document.getElementById('score').textContent = score;
