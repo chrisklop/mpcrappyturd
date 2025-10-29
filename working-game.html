@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Working Flappy Turd</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial; background: #2c3e50; color: white; }
+        canvas { border: 2px solid white; background: #87CEEB; }
+        .controls { margin: 20px 0; }
+        .button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
+        .status { margin: 10px 0; font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🚽 Working Flappy Turd 💩</h1>
+    <div class="status">Game State: <span id="gameState">MENU</span></div>
+    <div class="status">Instructions: <span id="instructions">Click Start Game</span></div>
+    
+    <canvas id="canvas" width="400" height="600"></canvas>
+    
+    <div class="controls">
+        <button class="button" onclick="startGame()">Start Game</button>
+        <button class="button" onclick="resetGame()">Reset</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game state - SIMPLE!
+        let state = 'MENU';           // MENU -> WAITING -> PLAYING -> GAMEOVER
+        let player = { x: 50, y: 300, velocity: 0, size: 20 };
+        let obstacles = [];
+        let score = 0;
+        let frame = 0;
+        
+        // Update displays
+        function updateUI() {
+            document.getElementById('gameState').textContent = state;
+            
+            if (state === 'MENU') {
+                document.getElementById('instructions').textContent = 'Click Start Game';
+            } else if (state === 'WAITING') {
+                document.getElementById('instructions').textContent = 'Click canvas to start flying!';
+            } else if (state === 'PLAYING') {
+                document.getElementById('instructions').textContent = 'Click to flap!';
+            } else if (state === 'GAMEOVER') {
+                document.getElementById('instructions').textContent = `Game Over! Score: ${score}`;
+            }
+        }
+        
+        function startGame() {
+            console.log('Starting game...');
+            state = 'WAITING';
+            player = { x: 50, y: 300, velocity: 0, size: 20 };
+            obstacles = [];
+            score = 0;
+            frame = 0;
+            updateUI();
+            gameLoop();
+        }
+        
+        function resetGame() {
+            state = 'MENU';
+            updateUI();
+        }
+        
+        function gameLoop() {
+            if (state === 'MENU') return;
+            
+            // Clear canvas
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update player based on state
+            if (state === 'PLAYING') {
+                // Apply gravity only when playing
+                player.velocity += 0.5;
+                player.y += player.velocity;
+                
+                // Check death
+                if (player.y > canvas.height - player.size || player.y < 0) {
+                    state = 'GAMEOVER';
+                    updateUI();
+                    return;
+                }
+            } else if (state === 'WAITING') {
+                // Gentle hover when waiting
+                player.y = 300 + Math.sin(frame * 0.05) * 10;
+                player.velocity = 0;
+            }
+            
+            // Generate obstacles only when playing
+            if (state === 'PLAYING' && frame % 120 === 0) {
+                obstacles.push({
+                    x: canvas.width,
+                    topHeight: Math.random() * 200 + 50,
+                    gap: 150,
+                    width: 50,
+                    passed: false
+                });
+            }
+            
+            // Update obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= 2;
+                
+                // Check collision (only when playing)
+                if (state === 'PLAYING' && 
+                    player.x < obs.x + obs.width &&
+                    player.x + player.size > obs.x &&
+                    (player.y < obs.topHeight || player.y + player.size > obs.topHeight + obs.gap)) {
+                    state = 'GAMEOVER';
+                    updateUI();
+                    return;
+                }
+                
+                // Score
+                if (state === 'PLAYING' && !obs.passed && obs.x + obs.width < player.x) {
+                    obs.passed = true;
+                    score++;
+                }
+                
+                // Remove off-screen
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+            
+            // Draw obstacles
+            ctx.fillStyle = '#8B4513';
+            obstacles.forEach(obs => {
+                ctx.fillRect(obs.x, 0, obs.width, obs.topHeight);
+                ctx.fillRect(obs.x, obs.topHeight + obs.gap, obs.width, canvas.height);
+            });
+            
+            // Draw player
+            ctx.fillStyle = '#ff6b35';
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+            ctx.fillText('💩', player.x + 2, player.y + 16);
+            
+            // Show overlay when waiting
+            if (state === 'WAITING') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('🚽 CLICK TO START FLYING! 💩', canvas.width/2, canvas.height/2);
+                ctx.fillText(`State: ${state}`, canvas.width/2, canvas.height/2 + 40);
+                ctx.textAlign = 'left';
+            }
+            
+            // Draw score
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+            
+            frame++;
+            updateUI();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Input handling
+        canvas.addEventListener('click', () => {
+            console.log('Canvas clicked, state:', state);
+            
+            if (state === 'WAITING') {
+                console.log('Starting to play!');
+                state = 'PLAYING';
+                player.velocity = -8; // First flap
+            } else if (state === 'PLAYING') {
+                console.log('Flapping!');
+                player.velocity = -8; // Flap
+            }
+        });
+        
+        // Space key
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                canvas.click(); // Trigger same logic
+            }
+        });
+        
+        // Initialize
+        updateUI();
+    </script>
+</body>
+</html>
