@@ -136,7 +136,8 @@
         let gameMode = 'single'; // 'single' or 'multiplayer'
         let score = 0;
         let frameCount = 0;
-        let playerStarted = false; // Simple flag to prevent falling until first input
+        let playerStarted = false; // GRAVITY DELAY: prevent falling until first input
+        console.log('GAME LOADED - playerStarted:', playerStarted);
         
         // Multiplayer variables
         let playerId = null;
@@ -275,7 +276,7 @@
             update() {
                 if (this.eliminated) return;
                 
-                // Only apply gravity AFTER player has started
+                // GRAVITY DELAY: Only apply gravity AFTER player has started
                 if (playerStarted) {
                     this.velocity += this.gravity;
                     this.y += this.velocity;
@@ -296,7 +297,8 @@
             
             flap() {
                 if (!this.eliminated) {
-                    playerStarted = true; // Start physics on first flap
+                    console.log('FIRST FLAP - starting gravity! playerStarted:', playerStarted, '->', true);
+                    playerStarted = true; // GRAVITY DELAY: Start physics on first flap
                     this.velocity = this.jumpPower;
                     playFlapSound();
                 }
@@ -413,7 +415,8 @@
             frameCount = 0;
             obstacles = [];
             player = new Player();
-            playerStarted = false; // Reset player started flag
+            playerStarted = false; // GRAVITY DELAY: Reset player started flag
+            console.log('NEW GAME - playerStarted reset to:', playerStarted);
             
             // Hide all other screens
             modeScreen.style.display = 'none';
