@@ -136,6 +136,7 @@
         let gameMode = 'single'; // 'single' or 'multiplayer'
         let score = 0;
         let frameCount = 0;
+        let playerStarted = false; // Simple flag to prevent falling until first input
         
         // Multiplayer variables
         let playerId = null;
@@ -274,8 +275,8 @@
             update() {
                 if (this.eliminated) return;
                 
-                // Don't apply gravity until actually playing
-                if (gameState === 'playing') {
+                // Only apply gravity AFTER player has started
+                if (playerStarted) {
                     this.velocity += this.gravity;
                     this.y += this.velocity;
                     
@@ -287,13 +288,15 @@
                         endGame();
                     }
                 } else {
-                    // Gentle hover animation while waiting to start
+                    // Hover until first input
                     this.y = 300 + Math.sin(frameCount * 0.05) * 5;
+                    this.velocity = 0;
                 }
             }
             
             flap() {
                 if (!this.eliminated) {
+                    playerStarted = true; // Start physics on first flap
                     this.velocity = this.jumpPower;
                     playFlapSound();
                 }
@@ -410,6 +413,7 @@
             frameCount = 0;
             obstacles = [];
             player = new Player();
+            playerStarted = false; // Reset player started flag
             
             // Hide all other screens
             modeScreen.style.display = 'none';
@@ -476,8 +480,8 @@
             // Update player
             player.update();
             
-            // Generate obstacles (only when actually playing)
-            if (frameCount % 120 === 0 && gameState === 'playing') {
+            // Generate obstacles (only after player starts)
+            if (frameCount % 120 === 0 && playerStarted) {
                 obstacles.push(new Obstacle(canvas.width));
             }
             
@@ -509,8 +513,8 @@
             obstacles.forEach(obstacle => obstacle.draw());
             player.draw();
             
-            // Show "Click to Start" message if waiting to start
-            if (gameState === 'waiting-to-start') {
+            // Show "Click to Start" message if player hasn't started
+            if (!playerStarted && (gameState === 'playing' || gameState === 'waiting-to-start')) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
@@ -518,7 +522,6 @@
                 ctx.font = 'bold 24px Bangers';
                 ctx.textAlign = 'center';
                 ctx.fillText('🚽 Click or Press SPACE to Start! 💩', canvas.width / 2, canvas.height / 2);
-                ctx.fillText(`State: ${gameState}`, canvas.width / 2, canvas.height / 2 + 40);
                 ctx.textAlign = 'left';
             }
             
