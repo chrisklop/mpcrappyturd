@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Turd: Multiplayer Sewer Survival</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        html, body {
+            overscroll-behavior-y: contain;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            position: fixed;
+        }
+        body {
+            margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+            background-color: #2c3e50; font-family: 'Bangers', cursive;
+            touch-action: manipulation;
+            user-select: none; 
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #game-container {
+            position: relative; width: 100%; max-width: 400px; height: 100%; max-height: 600px;
+            background-color: #3d3d3d; border: 5px solid #222; border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2); overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; background-color: rgba(0, 0, 0, 0.6); color: white; z-index: 10;
+            padding: 20px; box-sizing: border-box;
+        }
+        h1 { font-size: 3.5rem; text-shadow: 4px 4px 0 #000; margin-bottom: 10px; }
+        h2 { font-size: 2.5rem; text-shadow: 3px 3px 0 #000; margin-bottom: 15px; }
+        p { font-size: 1.5rem; text-shadow: 2px 2px 0 #000; margin: 10px 20px; }
+        .button {
+            font-family: 'Bangers', cursive; font-size: 2rem; padding: 10px 30px;
+            background-color: #27ae60; color: #fff; border: 4px solid #fff; border-radius: 10px;
+            cursor: pointer; text-shadow: 2px 2px 0 #000; box-shadow: 0 5px 0 #1e8449;
+            transition: all 0.1s ease-in-out; margin: 5px;
+        }
+        .button:active { transform: translateY(5px); box-shadow: none; }
+        .button.secondary {
+            background-color: #e74c3c; box-shadow: 0 5px 0 #c0392b;
+        }
+        input[type="text"] {
+            font-family: 'Bangers', cursive; font-size: 1.8rem; padding: 10px;
+            border: 4px solid #fff; border-radius: 10px; background-color: #fff;
+            color: #000; text-align: center; margin: 10px; width: 250px;
+        }
+        .status { font-size: 1.2rem; margin: 10px; color: #f39c12; }
+        #hud {
+            position: absolute; top: 10px; left: 10px; right: 10px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            color: white; font-size: 1.5rem; z-index: 5; pointer-events: none;
+        }
+        .lobby-info {
+            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 10px;
+            margin: 10px; font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="400" height="600"></canvas>
+        
+        <!-- HUD -->
+        <div id="hud">
+            <div>Score: <span id="score">0</span></div>
+            <div class="status" id="connection-status">Offline</div>
+        </div>
+
+        <!-- Mode Selection Screen -->
+        <div class="overlay" id="mode-screen">
+            <h1>🚽 Flappy Turd 💩</h1>
+            <h2>Multiplayer Sewer Survival</h2>
+            <input type="text" id="gamertag-input" placeholder="Enter Your Sewer Handle" maxlength="10">
+            <button class="button" id="single-btn">Single Player</button>
+            <button class="button" id="multiplayer-btn">Multiplayer</button>
+            <div class="lobby-info">
+                <div>🌐 Online Players: <span id="online-count">...</span></div>
+                <div>🏠 Active Rooms: <span id="rooms-count">...</span></div>
+            </div>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div class="overlay" id="lobby-screen" style="display: none;">
+            <h2>Sewer Lobby</h2>
+            <div class="lobby-info">
+                <div>Room: <span id="room-id">...</span></div>
+                <div>Players: <span id="player-count">1</span>/6</div>
+                <div id="player-list"></div>
+            </div>
+            <button class="button" id="ready-btn">Ready to Swim! 🏊‍♂️</button>
+            <button class="button secondary" id="leave-btn">Leave Lobby</button>
+            <div class="status" id="lobby-status">Waiting for players...</div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div class="overlay" id="game-over-screen" style="display: none;">
+            <h2 id="game-over-title">Game Over!</h2>
+            <p id="final-score">Score: 0</p>
+            <div id="multiplayer-results" style="display: none;">
+                <h3>Final Rankings:</h3>
+                <div id="rankings"></div>
+            </div>
+            <button class="button" id="restart-btn">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize audio context on user interaction
+        let audioContextStarted = false;
+        
+        // Game variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameState = 'menu'; // 'menu', 'playing', 'game-over'
+        let gameMode = 'single'; // 'single' or 'multiplayer'
+        let score = 0;
+        let frameCount = 0;
+        
+        // Multiplayer variables
+        let playerId = null;
+        let roomId = null;
+        let gamertag = '';
+        let isReady = false;
+        let currentRoom = null;
+        let pollInterval = null;
+        
+        // UI elements
+        const modeScreen = document.getElementById('mode-screen');
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const gamertagInput = document.getElementById('gamertag-input');
+        
+        // Simple multiplayer API
+        const API_BASE = window.location.origin + '/api/rooms';
+        
+        class SimpleMultiplayer {
+            constructor() {
+                this.connected = false;
+            }
+            
+            async joinRoom(gamertag) {
+                try {
+                    const response = await fetch(API_BASE + '?action=join', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            playerId: playerId,
+                            gamertag: gamertag,
+                            color: '#ff6b35'
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        roomId = data.roomId;
+                        currentRoom = data.room;
+                        this.connected = true;
+                        return data;
+                    } else {
+                        throw new Error(data.error);
+                    }
+                } catch (error) {
+                    console.error('Failed to join room:', error);
+                    throw error;
+                }
+            }
+            
+            async setReady(ready) {
+                try {
+                    const response = await fetch(API_BASE + '?action=ready', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: roomId,
+                            playerId: playerId,
+                            ready: ready
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        currentRoom = data.room;
+                        return data;
+                    }
+                } catch (error) {
+                    console.error('Failed to set ready:', error);
+                }
+            }
+            
+            async pollRoom() {
+                if (!roomId) return;
+                
+                try {
+                    const response = await fetch(API_BASE + `?action=room&roomId=${roomId}`);
+                    const data = await response.json();
+                    if (response.ok) {
+                        currentRoom = data.room;
+                        updateLobbyDisplay();
+                        
+                        // Check if game should start
+                        if (currentRoom.status === 'starting' && gameState === 'menu') {
+                            setTimeout(() => startGame(), 3000);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to poll room:', error);
+                }
+            }
+            
+            async getStats() {
+                try {
+                    const response = await fetch(API_BASE + '?action=stats');
+                    const data = await response.json();
+                    if (response.ok) {
+                        return data;
+                    }
+                } catch (error) {
+                    console.error('Failed to get stats:', error);
+                }
+                return { activeRooms: 1, onlineCount: 3 };
+            }
+            
+            startPolling() {
+                if (pollInterval) clearInterval(pollInterval);
+                pollInterval = setInterval(() => this.pollRoom(), 2000);
+            }
+            
+            stopPolling() {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+            }
+        }
+        
+        const multiplayer = new SimpleMultiplayer();
+        
+        // Game objects
+        class Player {
+            constructor() {
+                this.x = 80;
+                this.y = 300;
+                this.velocity = 0;
+                this.gravity = 0.5;
+                this.jumpPower = -8;
+                this.size = 20;
+                this.color = '#ff6b35';
+                this.eliminated = false;
+            }
+            
+            update() {
+                if (this.eliminated) return;
+                
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+                
+                // Check boundaries
+                if (this.y < 0) this.y = 0;
+                if (this.y > canvas.height - this.size) {
+                    this.eliminated = true;
+                    playFartSound();
+                    endGame();
+                }
+            }
+            
+            flap() {
+                if (!this.eliminated) {
+                    this.velocity = this.jumpPower;
+                    playFlapSound();
+                }
+            }
+            
+            draw() {
+                ctx.fillStyle = this.eliminated ? '#666' : this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                
+                // Draw poop emoji
+                ctx.font = '16px Arial';
+                ctx.fillText('💩', this.x + 2, this.y + 16);
+            }
+        }
+        
+        class Obstacle {
+            constructor(x) {
+                this.x = x;
+                this.width = 50;
+                this.gap = 150;
+                this.topHeight = Math.random() * (canvas.height - this.gap - 100) + 50;
+                this.bottomHeight = canvas.height - this.topHeight - this.gap;
+                this.passed = false;
+            }
+            
+            update() {
+                this.x -= 2;
+            }
+            
+            draw() {
+                // Top pipe
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(this.x, 0, this.width, this.topHeight);
+                
+                // Bottom pipe
+                ctx.fillRect(this.x, canvas.height - this.bottomHeight, this.width, this.bottomHeight);
+                
+                // Pipe caps
+                ctx.fillStyle = '#A0522D';
+                ctx.fillRect(this.x - 5, this.topHeight - 20, this.width + 10, 20);
+                ctx.fillRect(this.x - 5, canvas.height - this.bottomHeight, this.width + 10, 20);
+            }
+            
+            checkCollision(player) {
+                if (player.x < this.x + this.width &&
+                    player.x + player.size > this.x &&
+                    (player.y < this.topHeight ||
+                     player.y + player.size > canvas.height - this.bottomHeight)) {
+                    return true;
+                }
+                return false;
+            }
+        }
+        
+        let player = new Player();
+        let obstacles = [];
+        
+        // Audio system
+        let synth = null;
+        
+        async function initAudio() {
+            if (!audioContextStarted) {
+                await Tone.start();
+                synth = new Tone.Synth().toDestination();
+                audioContextStarted = true;
+            }
+        }
+        
+        function playFlapSound() {
+            if (synth) {
+                synth.triggerAttackRelease('C4', '8n');
+            }
+        }
+        
+        function playFartSound() {
+            if (synth) {
+                synth.triggerAttackRelease('G2', '0.3');
+                setTimeout(() => synth.triggerAttackRelease('F2', '0.2'), 100);
+                setTimeout(() => synth.triggerAttackRelease('E2', '0.1'), 200);
+            }
+        }
+        
+        // Game functions
+        function updateStats() {
+            multiplayer.getStats().then(stats => {
+                document.getElementById('online-count').textContent = stats.onlineCount;
+                document.getElementById('rooms-count').textContent = stats.activeRooms;
+            });
+        }
+        
+        function updateLobbyDisplay() {
+            if (!currentRoom) return;
+            
+            document.getElementById('room-id').textContent = currentRoom.id.slice(-8);
+            document.getElementById('player-count').textContent = currentRoom.players.length;
+            
+            const playerList = document.getElementById('player-list');
+            playerList.innerHTML = currentRoom.players.map(p => 
+                `<div>${p.gamertag} ${p.ready ? '✅' : '⏳'}</div>`
+            ).join('');
+        }
+        
+        function startGame() {
+            gameState = 'playing';
+            score = 0;
+            frameCount = 0;
+            obstacles = [];
+            player = new Player();
+            
+            modeScreen.style.display = 'none';
+            lobbyScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            
+            if (gameMode === 'multiplayer') {
+                multiplayer.startPolling();
+            }
+            
+            gameLoop();
+        }
+        
+        function endGame() {
+            gameState = 'game-over';
+            multiplayer.stopPolling();
+            
+            document.getElementById('final-score').textContent = `Score: ${score}`;
+            document.getElementById('game-over-title').textContent = 
+                gameMode === 'multiplayer' ? 'Sewer Survival Complete!' : 'Game Over!';
+            
+            gameOverScreen.style.display = 'flex';
+        }
+        
+        function gameLoop() {
+            if (gameState !== 'playing') return;
+            
+            // Clear canvas
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update player
+            player.update();
+            
+            // Generate obstacles
+            if (frameCount % 120 === 0) {
+                obstacles.push(new Obstacle(canvas.width));
+            }
+            
+            // Update obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update();
+                
+                // Check collision
+                if (obstacles[i].checkCollision(player)) {
+                    player.eliminated = true;
+                    playFartSound();
+                    endGame();
+                    return;
+                }
+                
+                // Score
+                if (!obstacles[i].passed && obstacles[i].x + obstacles[i].width < player.x) {
+                    obstacles[i].passed = true;
+                    score++;
+                }
+                
+                // Remove off-screen obstacles
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+            
+            // Draw everything
+            obstacles.forEach(obstacle => obstacle.draw());
+            player.draw();
+            
+            // Update score display
+            document.getElementById('score').textContent = score;
+            
+            frameCount++;
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Event listeners
+        document.getElementById('single-btn').addEventListener('click', async () => {
+            await initAudio();
+            gameMode = 'single';
+            document.getElementById('connection-status').textContent = 'Single Player';
+            startGame();
+        });
+        
+        document.getElementById('multiplayer-btn').addEventListener('click', async () => {
+            await initAudio();
+            
+            gamertag = gamertagInput.value.trim();
+            if (!gamertag) {
+                alert('Please enter your Sewer Handle!');
+                return;
+            }
+            
+            gameMode = 'multiplayer';
+            playerId = 'player_' + Date.now();
+            
+            try {
+                document.getElementById('connection-status').textContent = 'Connecting...';
+                await multiplayer.joinRoom(gamertag);
+                
+                document.getElementById('connection-status').textContent = 'Connected';
+                modeScreen.style.display = 'none';
+                lobbyScreen.style.display = 'flex';
+                
+                updateLobbyDisplay();
+                multiplayer.startPolling();
+                
+            } catch (error) {
+                alert('Failed to join multiplayer: ' + error.message);
+                document.getElementById('connection-status').textContent = 'Connection Failed';
+            }
+        });
+        
+        document.getElementById('ready-btn').addEventListener('click', async () => {
+            isReady = !isReady;
+            await multiplayer.setReady(isReady);
+            document.getElementById('ready-btn').textContent = isReady ? 'Cancel Ready' : 'Ready to Swim! 🏊‍♂️';
+        });
+        
+        document.getElementById('leave-btn').addEventListener('click', () => {
+            multiplayer.stopPolling();
+            lobbyScreen.style.display = 'none';
+            modeScreen.style.display = 'flex';
+            gameMode = 'single';
+        });
+        
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            modeScreen.style.display = 'flex';
+        });
+        
+        // Input handling
+        function handleInput(event) {
+            if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA')) {
+                return;
+            }
+            event.preventDefault();
+            if (gameState === 'playing' && !player.eliminated) {
+                player.flap();
+            }
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') handleInput(e);
+        });
+        
+        document.addEventListener('touchstart', handleInput);
+        document.addEventListener('click', handleInput);
+        
+        // Initialize
+        updateStats();
+        setInterval(updateStats, 10000);
+    </script>
+</body>
+</html>
