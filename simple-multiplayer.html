@@ -98,6 +98,7 @@
                 <div id="player-list"></div>
             </div>
             <button class="button" id="ready-btn">Ready to Swim! 🏊‍♂️</button>
+            <button class="button" id="force-start-btn" style="display: none;">Force Start (2+ Players) 🚀</button>
             <button class="button secondary" id="leave-btn">Leave Lobby</button>
             <div class="status" id="lobby-status">Waiting for players...</div>
         </div>
@@ -219,7 +220,7 @@
                         
                         // Check if game should start
                         if (currentRoom.status === 'starting' && gameState === 'menu') {
-                            setTimeout(() => startGame(), 3000);
+                            startGame(); // This will show get-ready screen
                         }
                     }
                 } catch (error) {
@@ -385,6 +386,14 @@
             playerList.innerHTML = currentRoom.players.map(p => 
                 `<div>${p.gamertag} ${p.ready ? '✅' : '⏳'}</div>`
             ).join('');
+            
+            // Show/hide force start button based on player count
+            const forceStartBtn = document.getElementById('force-start-btn');
+            if (currentRoom.players.length >= 2) {
+                forceStartBtn.style.display = 'block';
+            } else {
+                forceStartBtn.style.display = 'none';
+            }
         }
         
         function showGetReady() {
@@ -541,6 +550,19 @@
             isReady = !isReady;
             await multiplayer.setReady(isReady);
             document.getElementById('ready-btn').textContent = isReady ? 'Cancel Ready' : 'Ready to Swim! 🏊‍♂️';
+        });
+        
+        document.getElementById('force-start-btn').addEventListener('click', async () => {
+            // Force all players in room to ready state
+            if (currentRoom && currentRoom.players.length >= 2) {
+                // Set current player ready
+                isReady = true;
+                await multiplayer.setReady(true);
+                document.getElementById('ready-btn').textContent = 'Cancel Ready';
+                
+                // Start game immediately
+                startGame();
+            }
         });
         
         document.getElementById('leave-btn').addEventListener('click', () => {
