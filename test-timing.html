@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Timing Test</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        canvas { border: 2px solid black; }
+        .button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Simple Timing Test</h1>
+    <canvas id="canvas" width="400" height="300"></canvas><br>
+    <button class="button" onclick="startGame()">Start Game</button>
+    <div>Game State: <span id="state">menu</span></div>
+    <div>Message: <span id="message">Click start to begin</span></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameState = 'menu';
+        let player = { x: 50, y: 150, velocity: 0 };
+        
+        function startGame() {
+            gameState = 'waiting';
+            document.getElementById('state').textContent = gameState;
+            document.getElementById('message').textContent = 'Click canvas to start falling!';
+            gameLoop();
+        }
+        
+        function gameLoop() {
+            // Clear canvas
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update player
+            if (gameState === 'playing') {
+                player.velocity += 0.5; // gravity
+                player.y += player.velocity;
+            } else if (gameState === 'waiting') {
+                // Hover
+                player.y = 150 + Math.sin(Date.now() * 0.005) * 10;
+            }
+            
+            // Draw player
+            ctx.fillStyle = 'red';
+            ctx.fillRect(player.x, player.y, 20, 20);
+            
+            // Show overlay if waiting
+            if (gameState === 'waiting') {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('CLICK TO START!', canvas.width/2, canvas.height/2);
+            }
+            
+            if (gameState !== 'menu') {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        canvas.addEventListener('click', () => {
+            if (gameState === 'waiting') {
+                gameState = 'playing';
+                document.getElementById('state').textContent = gameState;
+                document.getElementById('message').textContent = 'Now falling with gravity!';
+            }
+        });
+    </script>
+</body>
+</html>
