@@ -132,12 +132,12 @@
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
         
-        let gameState = 'menu'; // 'menu', 'waiting-to-start', 'playing', 'game-over'
+        let gameState = 'menu'; // 'menu', 'playing', 'game-over'
         let gameMode = 'single'; // 'single' or 'multiplayer'
         let score = 0;
         let frameCount = 0;
-        let playerStarted = false; // GRAVITY DELAY: prevent falling until first input
-        console.log('GAME LOADED - playerStarted:', playerStarted);
+        let gravityActive = false; // BULLETPROOF: gravity only starts after first input
+        console.log('GAME LOADED - gravityActive:', gravityActive);
         
         // Multiplayer variables
         let playerId = null;
@@ -276,8 +276,8 @@
             update() {
                 if (this.eliminated) return;
                 
-                // GRAVITY DELAY: Only apply gravity AFTER player has started
-                if (playerStarted) {
+                // BULLETPROOF: Only apply gravity AFTER first flap
+                if (gravityActive) {
                     this.velocity += this.gravity;
                     this.y += this.velocity;
                     
@@ -289,23 +289,23 @@
                         endGame();
                     }
                 } else {
-                    // Hover until first input - GRAVITY DELAY ACTIVE
-                    this.y = 300 + Math.sin(frameCount * 0.05) * 5;
+                    // Float gently until first flap - NO GRAVITY
+                    this.y = 300 + Math.sin(frameCount * 0.05) * 8;
                     this.velocity = 0;
                 }
             }
             
             flap() {
                 if (!this.eliminated) {
-                    console.log('FIRST FLAP - starting gravity! playerStarted:', playerStarted, '->', true);
-                    playerStarted = true; // GRAVITY DELAY: Start physics on first flap
+                    console.log('FLAP! gravityActive:', gravityActive, '->', true);
+                    gravityActive = true; // BULLETPROOF: Activate gravity on first flap
                     this.velocity = this.jumpPower;
                     playFlapSound();
                 }
             }
             
             draw() {
-                // Just draw poop emoji, no red square
+                // Clean poop emoji only
                 ctx.font = '20px Arial';
                 ctx.fillText('💩', this.x, this.y);
             }
@@ -414,8 +414,8 @@
             frameCount = 0;
             obstacles = [];
             player = new Player();
-            playerStarted = false; // GRAVITY DELAY: Reset player started flag
-            console.log('NEW GAME - playerStarted reset to:', playerStarted);
+            gravityActive = false; // BULLETPROOF: Reset gravity flag
+            console.log('NEW GAME - gravityActive reset to:', gravityActive);
             
             // Hide all other screens
             modeScreen.style.display = 'none';
@@ -435,14 +435,13 @@
                 } else {
                     countdownText.textContent = 'Click or press SPACE to start!';
                     clearInterval(countdownInterval);
-                    // After countdown, transition to waiting state
-                    startGameNow();
+                    // STOP AUTO-START: Let player click to begin
                 }
             }, 1000);
         }
         
         function startGameNow() {
-            gameState = 'waiting-to-start'; // Set to waiting state first
+            gameState = 'playing'; // SIMPLE: go straight to playing
             
             // Hide get ready screen
             getReadyScreen.style.display = 'none';
@@ -470,10 +469,10 @@
         }
         
         function gameLoop() {
-            if (gameState !== 'playing' && gameState !== 'waiting-to-start') return;
+            if (gameState !== 'playing') return;
             
             // Debug: Update state display
-            document.getElementById('debug-state').textContent = gameState;
+            document.getElementById('debug-state').textContent = gameState + (gravityActive ? ' (gravity)' : ' (floating)');
             
             // Clear canvas
             ctx.fillStyle = '#87CEEB';
@@ -482,8 +481,8 @@
             // Update player
             player.update();
             
-            // Generate obstacles (only after player starts)
-            if (frameCount % 120 === 0 && playerStarted) {
+            // Generate obstacles (only after gravity starts)
+            if (frameCount % 120 === 0 && gravityActive) {
                 obstacles.push(new Obstacle(canvas.width));
             }
             
@@ -491,16 +490,16 @@
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 obstacles[i].update();
                 
-                // Check collision
-                if (obstacles[i].checkCollision(player)) {
+                // Check collision (only when gravity is active)
+                if (gravityActive && obstacles[i].checkCollision(player)) {
                     player.eliminated = true;
                     playFartSound();
                     endGame();
                     return;
                 }
                 
-                // Score
-                if (!obstacles[i].passed && obstacles[i].x + obstacles[i].width < player.x) {
+                // Score (only when gravity is active)
+                if (gravityActive && !obstacles[i].passed && obstacles[i].x + obstacles[i].width < player.x) {
                     obstacles[i].passed = true;
                     score++;
                 }
@@ -515,15 +514,15 @@
             obstacles.forEach(obstacle => obstacle.draw());
             player.draw();
             
-            // Show "Click to Start" message if player hasn't started
-            if (!playerStarted && (gameState === 'playing' || gameState === 'waiting-to-start')) {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            // BULLETPROOF: Show overlay until first flap
+            if (!gravityActive) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 24px Bangers';
                 ctx.textAlign = 'center';
-                ctx.fillText('🚽 Click or Press SPACE to Start! 💩', canvas.width / 2, canvas.height / 2);
+                ctx.fillText('🚽 Click or Press SPACE to Start Flying! 💩', canvas.width / 2, canvas.height / 2);
                 ctx.textAlign = 'left';
             }
             
@@ -578,14 +577,17 @@
         });
         
         document.getElementById('force-start-btn').addEventListener('click', async () => {
-            // Force all players in room to ready state
+            // Force start with 2+ players
             if (currentRoom && currentRoom.players.length >= 2) {
+                console.log('Force starting game with', currentRoom.players.length, 'players');
+                
                 // Set current player ready
                 isReady = true;
                 await multiplayer.setReady(true);
                 document.getElementById('ready-btn').textContent = 'Cancel Ready';
                 
-                // Start game immediately
+                // Hide lobby and start game immediately
+                lobbyScreen.style.display = 'none';
                 startGame();
             }
         });
@@ -619,12 +621,9 @@
                 return;
             }
             
-            // Normal gameplay input or start the game
-            if (gameState === 'waiting-to-start') {
-                gameState = 'playing'; // Start the actual game on first input
-                player.flap();
-            } else if (gameState === 'playing' && !player.eliminated) {
-                player.flap();
+            // BULLETPROOF: Flap only when playing and not eliminated
+            if (gameState === 'playing' && !player.eliminated) {
+                player.flap(); // This activates gravity automatically
             }
         }
         
